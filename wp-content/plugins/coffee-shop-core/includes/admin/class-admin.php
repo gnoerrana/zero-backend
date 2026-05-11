@@ -21,6 +21,17 @@ class Coffee_Shop_Admin {
         add_action('save_post_order', array($this, 'save_order_meta'));
         add_action('save_post_menu_item', array($this, 'save_menu_item_meta'));
         add_action('save_post_promotion', array($this, 'save_promotion_meta'));
+
+        // Ensure user roles are available
+        add_action('admin_init', array($this, 'ensure_user_roles'));
+
+        // User profile fields
+        add_action('show_user_profile', array($this, 'add_user_profile_fields'));
+        add_action('edit_user_profile', array($this, 'add_user_profile_fields'));
+        add_action('user_new_form', array($this, 'add_user_profile_fields'));
+        add_action('personal_options_update', array($this, 'save_user_profile_fields'));
+        add_action('edit_user_profile_update', array($this, 'save_user_profile_fields'));
+        add_action('user_register', array($this, 'save_user_profile_fields'));
     }
 
     /**
@@ -239,6 +250,9 @@ class Coffee_Shop_Admin {
             'normal',
             'high'
         );
+
+        // Add user role verification on admin pages
+        add_action('admin_notices', array($this, 'check_user_roles'));
     }
 
     /**
@@ -339,6 +353,40 @@ class Coffee_Shop_Admin {
     }
 
     /**
+     * Ensure user roles exist on admin init
+     */
+    public function ensure_user_roles() {
+        Coffee_Shop_User_Roles::register_custom_roles();
+        Coffee_Shop_User_Roles::add_role_capabilities();
+    }
+
+    /**
+     * Check if custom user roles exist and show notice if needed
+     */
+    public function check_user_roles() {
+        // Only show on user-related pages
+        $screen = get_current_screen();
+        if (!$screen || !in_array($screen->id, array('users', 'user-new', 'coffee-shop-settings'))) {
+            return;
+        }
+
+        // Check if roles exist
+        $store_admin_role = get_role('store_admin');
+        $cashier_role = get_role('cashier');
+
+        if (!$store_admin_role || !$cashier_role) {
+            echo '<div class="notice notice-warning is-dismissible">';
+            echo '<p><strong>' . __('Coffee Shop Roles:', 'coffee-shop') . '</strong> ';
+            echo __('Custom user roles (Store Admin, Cashier) are being created. Please refresh this page if you don\'t see them in the role dropdown.', 'coffee-shop');
+            echo '</p>';
+            echo '</div>';
+
+            // Try to create roles
+            Coffee_Shop_User_Roles::register_custom_roles();
+        }
+    }
+
+    /**
      * Save order meta
      */
     public function save_order_meta($post_id) {
@@ -423,6 +471,61 @@ class Coffee_Shop_Admin {
         foreach ($fields as $field) {
             if (isset($_POST[$field])) {
                 update_post_meta($post_id, $field, $_POST[$field]);
+            }
+        }
+    }
+
+    /**
+     * Add user profile fields
+     */
+    public function add_user_profile_fields($user) {
+        // Check if we're on the add new user page
+        $is_new_user = !isset($user->ID);
+
+        if ($is_new_user) {
+            // For new user form
+            $phone = '';
+        } else {
+            // For existing user
+            $phone = get_user_meta($user->ID, 'phone', true);
+        }
+        ?>
+        <h3><?php _e('Contact Information', 'coffee-shop'); ?></h3>
+        <table class="form-table">
+            <tr>
+                <th><label for="phone"><?php _e('Phone Number', 'coffee-shop'); ?></label></th>
+                <td>
+                    <input type="tel"
+                           id="phone"
+                           name="phone"
+                           value="<?php echo esc_attr($phone); ?>"
+                           class="regular-text"
+                           placeholder="<?php _e('Enter phone number', 'coffee-shop'); ?>" />
+                    <p class="description"><?php _e('User\'s phone number for contact purposes.', 'coffee-shop'); ?></p>
+                </td>
+            </tr>
+        </table>
+        <?php
+    }
+
+    /**
+     * Save user profile fields
+     */
+    public function save_user_profile_fields($user_id) {
+        // Check permissions
+        if (!current_user_can('edit_user', $user_id)) {
+            return false;
+        }
+
+        // Check if phone field is set
+        if (isset($_POST['phone'])) {
+            $phone = sanitize_text_field($_POST['phone']);
+
+            // Save or delete the phone number
+            if (!empty($phone)) {
+                update_user_meta($user_id, 'phone', $phone);
+            } else {
+                delete_user_meta($user_id, 'phone');
             }
         }
     }

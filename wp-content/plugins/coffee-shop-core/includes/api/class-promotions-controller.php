@@ -56,14 +56,18 @@ class Coffee_Shop_Promotions_Controller extends Coffee_Shop_REST_Controller {
             'posts_per_page' => -1,
             'orderby'        => 'menu_order',
             'order'          => 'ASC',
-            'meta_query'     => array(
+        );
+
+        // Include inactive promotions if requested
+        if (!$request->get_param('status') || $request->get_param('status') !== 'any') {
+            $args['meta_query'] = array(
                 array(
                     'key'     => 'is_active',
                     'value'   => '1',
                     'compare' => '=',
                 ),
-            ),
-        );
+            );
+        }
 
         // Filter by category
         if ($category = $request->get_param('category')) {

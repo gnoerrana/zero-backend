@@ -1,0 +1,70 @@
+# ===========================
+# WordPress .gitignore
+# ===========================
+
+
+# OS / Editor junk
+*/.DS_Store
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.log
+*.tmp
+*.swp
+*.bak
+*.swo
+*.orig
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+node_modules/
+vendor/
+
+# ===========================
+# WordPress Core
+# ===========================
+# Ignore core WordPress files if you’re versioning only wp-content
+wp-admin/
+wp-includes/
+wp-config.php
+wp*.php
+license.txt
+readme.html
+xmlrpc.php
+
+# ===========================
+# wp-content
+# ===========================
+
+# Uploads (usually not version-controlled)
+wp-content/uploads/
+wp-content/upgrade/
+wp-content/cache/
+
+# Plugins — ignore all except custom ones
+!wp-content/plugins/your-custom-plugin/
+!wp-content/plugins/your-custom-plugin/
+!wp-content/plugins/jwt-auth/
+!wp-content/plugins/wp-user-api-auth/
+!wp-content/plugins/api-bearer-auth/
+!wp-content/plugins/Basic-Auth-master/
+!wp-content/plugins/jwt-auth/
+
+!wp-content/mu-plugins/wp-user-api-auth.php
+# Themes — ignore all except custom ones
+# wp-content/themes/*
+!wp-content/themes/your-custom-theme/
+!wp-content/themes/bootscore-main/
+# mu-plugins (optional: ignore all or keep custom)
+wp-content/mu-plugins/*
+!wp-content/mu-plugins/your-custom-mu-plugin.php
+
+# ===========================
+# Composer / npm / build
+# ===========================
+node_modules/
+bower_components/
+
+
+

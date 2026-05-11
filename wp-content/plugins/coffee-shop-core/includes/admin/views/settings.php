@@ -122,8 +122,39 @@ $pickup_time_default = get_option('coffee_shop_pickup_time_default', 15);
                     </tr>
                 </table>
             </div>
+
+            <!-- User Roles Information -->
+            <div class="settings-section">
+                <h2><?php _e('User Roles', 'coffee-shop'); ?></h2>
+                <p><?php _e('The Coffee Shop plugin automatically creates custom user roles for store management.', 'coffee-shop'); ?></p>
+
+                <h3><?php _e('Available Roles', 'coffee-shop'); ?></h3>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('Administrator', 'coffee-shop'); ?></th>
+                        <td><?php _e('Full access to all WordPress features plus coffee shop management.', 'coffee-shop'); ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('Store Admin', 'coffee-shop'); ?></th>
+                        <td><?php _e('Can manage products, promotions, orders, and view reports. Cannot manage users or WordPress settings.', 'coffee-shop'); ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('Cashier', 'coffee-shop'); ?></th>
+                        <td><?php _e('Limited access to manage orders and view basic reports only.', 'coffee-shop'); ?></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('Customer', 'coffee-shop'); ?></th>
+                        <td><?php _e('Regular customers with access to place orders and view their account.', 'coffee-shop'); ?></td>
+                    </tr>
+                </table>
+
+                <p>
+                    <strong><?php _e('Note:', 'coffee-shop'); ?></strong>
+                    <?php _e('These roles are automatically created when you activate the plugin. You can assign them when creating new users in WordPress admin.', 'coffee-shop'); ?>
+                </p>
+            </div>
         </div>
-        
+
         <?php submit_button(__('Save Settings', 'coffee-shop')); ?>
     </form>
 </div>
