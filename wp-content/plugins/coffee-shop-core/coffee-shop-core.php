@@ -74,11 +74,12 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-promotions-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-dashboard-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-users-controller.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-media-controller.php';
 
-        // Admin
-        if (is_admin()) {
-            require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/class-admin.php';
-        }
+        // Admin - Temporarily disabled to debug upload.php error
+        // if (is_admin()) {
+        //     require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/class-admin.php';
+        // }
     }
 
     /**
@@ -117,9 +118,9 @@ final class Coffee_Shop_Core {
         Coffee_Shop_Reward::register();
         Coffee_Shop_Promotion::register();
 
-        // Force classic editor for promotion post type
+        // Force classic editor for menu_item and promotion post types
         add_filter('use_block_editor_for_post_type', function($use_block_editor, $post_type) {
-            if ($post_type === 'promotion') {
+            if (in_array($post_type, ['menu_item', 'promotion'])) {
                 return false;
             }
             return $use_block_editor;
@@ -134,6 +135,10 @@ final class Coffee_Shop_Core {
 
         // Add custom fields to user REST response
         add_filter('rest_prepare_user', array($this, 'add_user_custom_fields'), 10, 3);
+
+        // Clean up menu_item REST API response
+        add_filter('rest_prepare_menu_item', array($this, 'clean_menu_item_response'), 99, 3);
+        add_filter('rest_post_dispatch', array($this, 'remove_menu_item_links'), 10, 3);
     }
 
     /**
@@ -148,6 +153,7 @@ final class Coffee_Shop_Core {
             'Coffee_Shop_Promotions_Controller',
             'Coffee_Shop_Dashboard_Controller',
             'Coffee_Shop_Users_Controller',
+            'Coffee_Shop_Media_Controller',
         );
 
         foreach ($controllers as $controller) {
@@ -210,31 +216,40 @@ final class Coffee_Shop_Core {
             return $headers;
         });
 
-        // Add general CORS headers for all REST API requests (run early)
+        // Add general CORS headers for all API requests (run very early)
         add_action('init', function() {
-            if (defined('REST_REQUEST') && REST_REQUEST) {
-                $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-                $allowed_origins = ['http://localhost:3000', 'http://base.zerohour.local'];
-                if (in_array($origin, $allowed_origins)) {
-                    header('Access-Control-Allow-Origin: ' . $origin);
+            $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+            $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+            // Check if this is an API request (REST API or custom endpoints)
+            if (strpos($request_uri, '/wp-json/') !== false || strpos($request_uri, '/wp-admin/admin-ajax.php') !== false) {
+                $allowed_origins = ['http://localhost:3000', 'http://base.zerohour.local', 'http://localhost:8080'];
+                if (in_array($origin, $allowed_origins) || empty($origin)) {
+                    header('Access-Control-Allow-Origin: ' . ($origin ?: '*'));
                     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-                    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+                    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With, X-WP-Nonce');
                     header('Access-Control-Allow-Credentials: true');
                 }
             }
-        }, 1); // Priority 1 to run early
+        }, 0); // Priority 0 to run first
 
-        // Handle preflight requests early
+        // Handle preflight requests very early
         add_action('init', function() {
             if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+                $request_uri = $_SERVER['REQUEST_URI'] ?? '';
                 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-                $allowed_origins = ['http://localhost:3000', 'http://base.zerohour.local'];
-                if (in_array($origin, $allowed_origins)) {
-                    header('Access-Control-Allow-Origin: ' . $origin);
-                    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-                    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
-                    header('Access-Control-Allow-Credentials: true');
+
+                // Check if this is an API request
+                if (strpos($request_uri, '/wp-json/') !== false || strpos($request_uri, '/wp-admin/admin-ajax.php') !== false) {
+                    $allowed_origins = ['http://localhost:3000', 'http://base.zerohour.local', 'http://localhost:8080'];
+                    if (in_array($origin, $allowed_origins) || empty($origin)) {
+                        header('Access-Control-Allow-Origin: ' . ($origin ?: '*'));
+                        header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+                        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With, X-WP-Nonce');
+                        header('Access-Control-Allow-Credentials: true');
+                    }
                 }
+
                 header('Content-Type: text/plain charset=UTF-8');
                 header('Content-Length: 0');
                 exit(0);
@@ -259,6 +274,66 @@ final class Coffee_Shop_Core {
 
         $response->set_data($data);
         return $response;
+    }
+
+    /**
+     * Clean up menu_item REST API response
+     */
+    public function clean_menu_item_response($response, $post, $request) {
+        $data = $response->get_data();
+
+        // Fields to remove from the response
+        $fields_to_remove = array(
+            'guid',
+            'link',
+            'content',
+            'excerpt',
+            'featured_media',
+            'template',
+            'class_list',
+            '_embedded'
+        );
+
+        // Remove the specified fields
+        foreach ($fields_to_remove as $field) {
+            if (isset($data[$field])) {
+                unset($data[$field]);
+            }
+        }
+
+        $response->set_data($data);
+        return $response;
+    }
+
+    /**
+     * Remove links from menu_item REST API response
+     */
+    public function remove_menu_item_links($result, $server, $request) {
+        // Only modify menu_item responses
+        $route = $request->get_route();
+        if (strpos($route, '/wp/v2/menu_items') !== false) {
+            if ($result instanceof WP_REST_Response) {
+                $data = $result->get_data();
+                if (is_array($data)) {
+                    // Handle array of items (collection)
+                    foreach ($data as &$item) {
+                        if (is_array($item) && isset($item['_links'])) {
+                            unset($item['_links']);
+                        }
+                    }
+                    $result->set_data($data);
+                } elseif (is_array($data) && isset($data['_links'])) {
+                    // Handle single item
+                    unset($data['_links']);
+                    $result->set_data($data);
+                }
+            } elseif (is_array($result) && isset($result['_links'])) {
+                // Handle raw array response
+                unset($result['_links']);
+            }
+        }
+
+        return $result;
     }
 
     /**

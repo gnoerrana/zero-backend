@@ -41,8 +41,8 @@ class Coffee_Shop_Menu_Item {
             'hierarchical'        => false,
             'menu_position'       => 5,
             'menu_icon'           => 'dashicons-coffee',
-            'supports'            => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields'),
-            'show_in_rest'        => true,
+             'supports'            => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields'),
+             'show_in_rest'        => true,
             'rest_base'           => 'menu_items',
         );
 
@@ -101,13 +101,111 @@ class Coffee_Shop_Menu_Item {
                 'single'       => true,
                 'show_in_rest' => true,
             ),
-            'points_value' => array(
-                'type'         => 'integer',
-                'description'  => __('Reward points earned per purchase', 'coffee-shop'),
-                'single'       => true,
-                'show_in_rest' => true,
-                'default'      => 10,
-            ),
+             'points_value' => array(
+                 'type'         => 'integer',
+                 'description'  => __('Reward points earned per purchase', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+                 'default'      => 10,
+             ),
+             'product_title' => array(
+                 'type'         => 'string',
+                 'description'  => __('Product title', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
+             'product_description' => array(
+                 'type'         => 'object',
+                 'description'  => __('Product description with language variants', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => array(
+                     'schema' => array(
+                         'type'       => 'object',
+                         'properties' => array(
+                             'en' => array(
+                                 'type' => 'string',
+                             ),
+                             'id' => array(
+                                 'type' => 'string',
+                             ),
+                         ),
+                     ),
+                 ),
+             ),
+             'image' => array(
+                 'type'         => 'string',
+                 'description'  => __('Product image path', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
+             'map' => array(
+                 'type'         => 'string',
+                 'description'  => __('Map image path', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
+             'color' => array(
+                 'type'         => 'string',
+                 'description'  => __('Product color', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
+              'tags' => array(
+                  'type'         => 'array',
+                  'description'  => __('Product tags', 'coffee-shop'),
+                  'single'       => true,
+                  'show_in_rest' => array(
+                      'schema' => array(
+                          'type'  => 'array',
+                          'items' => array(
+                              'type' => 'string',
+                          ),
+                      ),
+                  ),
+              ),
+              'customization_options' => array(
+                  'type'         => 'object',
+                  'description'  => __('Product customization options', 'coffee-shop'),
+                  'single'       => true,
+                  'show_in_rest' => array(
+                      'schema' => array(
+                          'type'       => 'object',
+                          'properties' => array(),
+                      ),
+                  ),
+              ),
+              'enable_pattern' => array(
+                 'type'         => 'boolean',
+                 'description'  => __('Enable pattern overlay', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+                 'default'      => false,
+             ),
+             'pattern' => array(
+                 'type'         => 'string',
+                 'description'  => __('Pattern type', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
+             'image_type' => array(
+                 'type'         => 'string',
+                 'description'  => __('Image type (hot/iced)', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
+             'enable_flip' => array(
+                 'type'         => 'boolean',
+                 'description'  => __('Enable image flip', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+                 'default'      => false,
+             ),
+             'flip_image' => array(
+                 'type'         => 'string',
+                 'description'  => __('Flip image path', 'coffee-shop'),
+                 'single'       => true,
+                 'show_in_rest' => true,
+             ),
         );
 
         foreach ($meta_fields as $meta_key => $args) {

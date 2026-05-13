@@ -131,35 +131,95 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
      * Create menu item
      */
     public function create_item($request) {
-        $post_data = array(
-            'post_type'    => 'menu_item',
-            'post_title'   => $request->get_param('name'),
-            'post_content' => $request->get_param('description') ?: '',
-            'post_status'  => 'publish',
-        );
+        // Handle new JSON format
+        if ($request->get_param('product_title')) {
+            $post_data = array(
+                'post_type'    => 'menu_item',
+                'post_title'   => $request->get_param('product_title'),
+                'post_content' => '',
+                'post_status'  => 'publish',
+            );
 
-        $post_id = wp_insert_post($post_data);
+            $post_id = wp_insert_post($post_data);
 
-        if (is_wp_error($post_id)) {
-            return $post_id;
-        }
-
-        // Save meta fields
-        $meta_fields = array('price', 'category', 'is_available', 'preparation_time', 'calories', 'ingredients', 'allergens', 'points_value');
-        foreach ($meta_fields as $field) {
-            if ($value = $request->get_param($field)) {
-                update_post_meta($post_id, $field, $value);
+            if (is_wp_error($post_id)) {
+                return $post_id;
             }
-        }
 
-        // Set featured image
-        if ($image_id = $request->get_param('image_id')) {
-            set_post_thumbnail($post_id, $image_id);
-        }
+            // Save new meta fields
+            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'pattern', 'image_type', 'enable_flip', 'flip_image');
+            foreach ($new_meta_fields as $field) {
+                if ($request->get_param($field) !== null) {
+                    update_post_meta($post_id, $field, $request->get_param($field));
+                }
+            }
 
-        // Set category
-        if ($category = $request->get_param('category')) {
-            wp_set_object_terms($post_id, $category, 'menu_category');
+            // Handle is_available separately - store as '0' or '1' string for proper persistence
+            if ($request->get_param('is_available') !== null) {
+                update_post_meta($post_id, 'is_available', $request->get_param('is_available') ? '1' : '0');
+            }
+
+            // Handle product_description object
+            if ($product_description = $request->get_param('product_description')) {
+                update_post_meta($post_id, 'product_description', $product_description);
+            }
+
+            // Handle tags array
+            if ($tags = $request->get_param('tags')) {
+                update_post_meta($post_id, 'tags', $tags);
+            }
+
+            // Handle customization_options object
+            if ($customization_options = $request->get_param('customization_options')) {
+                update_post_meta($post_id, 'customization_options', $customization_options);
+            }
+
+            // Handle product_title as meta too
+            update_post_meta($post_id, 'product_title', $request->get_param('product_title'));
+
+            // Set categories taxonomy (supports multiple categories)
+            if ($categories = $request->get_param('category')) {
+                if (is_array($categories)) {
+                    // Convert category IDs to term objects for wp_set_object_terms
+                    $term_ids = array_map('intval', $categories);
+                    wp_set_object_terms($post_id, $term_ids, 'menu_category');
+                } else {
+                    // Fallback for single category
+                    wp_set_object_terms($post_id, $categories, 'menu_category');
+                }
+            }
+        } else {
+            // Legacy format support
+            $post_data = array(
+                'post_type'    => 'menu_item',
+                'post_title'   => $request->get_param('name'),
+                'post_content' => $request->get_param('description') ?: '',
+                'post_status'  => 'publish',
+            );
+
+            $post_id = wp_insert_post($post_data);
+
+            if (is_wp_error($post_id)) {
+                return $post_id;
+            }
+
+            // Save meta fields
+            $meta_fields = array('price', 'category', 'is_available', 'preparation_time', 'calories', 'ingredients', 'allergens', 'points_value');
+            foreach ($meta_fields as $field) {
+                if ($value = $request->get_param($field)) {
+                    update_post_meta($post_id, $field, $value);
+                }
+            }
+
+            // Set featured image
+            if ($image_id = $request->get_param('image_id')) {
+                set_post_thumbnail($post_id, $image_id);
+            }
+
+            // Set category
+            if ($category = $request->get_param('category')) {
+                wp_set_object_terms($post_id, $category, 'menu_category');
+            }
         }
 
         $post = get_post($post_id);
@@ -180,34 +240,92 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             return $this->format_error(__('Menu item not found', 'coffee-shop'), 'not_found', 404);
         }
 
-        // Update post data
-        $post_data = array('ID' => $post->ID);
-        
-        if ($name = $request->get_param('name')) {
-            $post_data['post_title'] = $name;
-        }
-        if ($description = $request->get_param('description')) {
-            $post_data['post_content'] = $description;
-        }
+        // Check if using new JSON format
+        if ($request->get_param('product_title') !== null) {
+            // Update post data for new format
+            $post_data = array('ID' => $post->ID);
 
-        wp_update_post($post_data);
-
-        // Update meta fields
-        $meta_fields = array('price', 'category', 'is_available', 'preparation_time', 'calories', 'ingredients', 'allergens', 'points_value');
-        foreach ($meta_fields as $field) {
-            if ($request->has_param($field)) {
-                update_post_meta($post->ID, $field, $request->get_param($field));
+            if ($product_title = $request->get_param('product_title')) {
+                $post_data['post_title'] = $product_title;
             }
-        }
 
-        // Update featured image
-        if ($request->has_param('image_id')) {
-            set_post_thumbnail($post->ID, $request->get_param('image_id'));
-        }
+            wp_update_post($post_data);
 
-        // Update category
-        if ($category = $request->get_param('category')) {
-            wp_set_object_terms($post->ID, $category, 'menu_category');
+            // Update new meta fields
+            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'pattern', 'image_type', 'enable_flip', 'flip_image');
+            foreach ($new_meta_fields as $field) {
+                if ($request->get_param($field) !== null) {
+                    update_post_meta($post->ID, $field, $request->get_param($field));
+                }
+            }
+
+            // Handle is_available separately - store as '0' or '1' string for proper persistence
+            if ($request->get_param('is_available') !== null) {
+                update_post_meta($post->ID, 'is_available', $request->get_param('is_available') ? '1' : '0');
+            }
+
+            // Handle product_description object
+            if ($request->has_param('product_description')) {
+                update_post_meta($post->ID, 'product_description', $request->get_param('product_description'));
+            }
+
+            // Handle tags array
+            if ($request->has_param('tags')) {
+                update_post_meta($post->ID, 'tags', $request->get_param('tags'));
+            }
+
+            // Handle customization_options object
+            if ($request->has_param('customization_options')) {
+                update_post_meta($post->ID, 'customization_options', $request->get_param('customization_options'));
+            }
+
+            // Update product_title meta
+            if ($product_title = $request->get_param('product_title')) {
+                update_post_meta($post->ID, 'product_title', $product_title);
+            }
+
+            // Update categories taxonomy (supports multiple categories)
+            if ($categories = $request->get_param('category')) {
+                if (is_array($categories)) {
+                    // Convert category IDs to term objects for wp_set_object_terms
+                    $term_ids = array_map('intval', $categories);
+                    wp_set_object_terms($post->ID, $term_ids, 'menu_category');
+                } else {
+                    // Fallback for single category
+                    wp_set_object_terms($post->ID, $categories, 'menu_category');
+                }
+            }
+        } else {
+            // Legacy format support
+            // Update post data
+            $post_data = array('ID' => $post->ID);
+
+            if ($name = $request->get_param('name')) {
+                $post_data['post_title'] = $name;
+            }
+            if ($description = $request->get_param('description')) {
+                $post_data['post_content'] = $description;
+            }
+
+            wp_update_post($post_data);
+
+            // Update meta fields
+            $meta_fields = array('price', 'category', 'is_available', 'preparation_time', 'calories', 'ingredients', 'allergens', 'points_value');
+            foreach ($meta_fields as $field) {
+                if ($request->has_param($field)) {
+                    update_post_meta($post->ID, $field, $request->get_param($field));
+                }
+            }
+
+            // Update featured image
+            if ($request->has_param('image_id')) {
+                set_post_thumbnail($post->ID, $request->get_param('image_id'));
+            }
+
+            // Update category
+            if ($category = $request->get_param('category')) {
+                wp_set_object_terms($post->ID, $category, 'menu_category');
+            }
         }
 
         $post = get_post($post->ID);
@@ -242,7 +360,7 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
     public function get_categories($request) {
         $terms = get_terms(array(
             'taxonomy'   => 'menu_category',
-            'hide_empty' => true,
+            'hide_empty' => false,
         ));
 
         $categories = array();
@@ -302,31 +420,68 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             }
         }
 
-        return $this->format_response($items);
+return $this->format_response($items);
     }
 
     /**
      * Prepare item for response
      */
     public function prepare_item_for_response($post, $request) {
-        $categories = wp_get_post_terms($post->ID, 'menu_category');
-        $category = !empty($categories) ? $categories[0]->slug : '';
+        $product_title = get_post_meta($post->ID, 'product_title', true);
 
-        return array(
-            'id'              => $post->ID,
-            'name'            => $post->post_title,
-            'description'     => $post->post_content,
-            'price'           => (float) get_post_meta($post->ID, 'price', true),
-            'category'        => get_post_meta($post->ID, 'category', true) ?: $category,
-            'image'           => get_the_post_thumbnail_url($post->ID, 'large'),
-            'thumbnail'       => get_the_post_thumbnail_url($post->ID, 'thumbnail'),
-            'is_available'    => (bool) get_post_meta($post->ID, 'is_available', true),
-            'preparation_time'=> (int) get_post_meta($post->ID, 'preparation_time', true) ?: 5,
-            'calories'        => (int) get_post_meta($post->ID, 'calories', true),
-            'ingredients'     => get_post_meta($post->ID, 'ingredients', true),
-            'allergens'       => get_post_meta($post->ID, 'allergens', true),
-            'points_value'    => (int) get_post_meta($post->ID, 'points_value', true) ?: 10,
-        );
+        // Check if item uses new JSON format (has product_title meta)
+        if ($product_title) {
+            // New JSON format
+            $categories = wp_get_post_terms($post->ID, 'menu_category');
+            $category = !empty($categories) ? $categories[0]->slug : '';
+
+            $is_available_raw = get_post_meta($post->ID, 'is_available', true);
+            $is_available = ($is_available_raw === '0' || $is_available_raw === 'false') ? false : true;
+
+            return array(
+                'post_id'             => $post->ID,
+                'category'            => get_post_meta($post->ID, 'category', true) ?: $category,
+                'id'                  => $post->ID,
+                'image'               => get_post_meta($post->ID, 'image', true),
+                'map'                 => get_post_meta($post->ID, 'map', true),
+                'price'               => (float) get_post_meta($post->ID, 'price', true),
+                'product_title'       => $product_title,
+                'product_description' => get_post_meta($post->ID, 'product_description', true) ?: array('en' => '', 'id' => ''),
+                'is_available'        => $is_available,
+                'tags'                => get_post_meta($post->ID, 'tags', true) ?: array(),
+                'menu_categories'     => wp_list_pluck($categories, 'term_id'),
+                'customization_options' => get_post_meta($post->ID, 'customization_options', true) ?: array(),
+                'enable_pattern'      => (bool) get_post_meta($post->ID, 'enable_pattern', true),
+                'pattern'             => get_post_meta($post->ID, 'pattern', true),
+                'image_type'          => get_post_meta($post->ID, 'image_type', true),
+                'enable_flip'         => (bool) get_post_meta($post->ID, 'enable_flip', true),
+                'flip_image'          => get_post_meta($post->ID, 'flip_image', true),
+            );
+        } else {
+            // Legacy format
+            $categories = wp_get_post_terms($post->ID, 'menu_category');
+            $category = !empty($categories) ? $categories[0]->slug : '';
+
+            $is_available_raw = get_post_meta($post->ID, 'is_available', true);
+            $is_available = ($is_available_raw === '0' || $is_available_raw === 'false') ? false : true;
+
+            return array(
+                'id'              => $post->ID,
+                'name'            => $post->post_title,
+                'description'     => $post->post_content,
+                'price'           => (float) get_post_meta($post->ID, 'price', true),
+                'category'        => get_post_meta($post->ID, 'category', true) ?: $category,
+                'image'           => get_the_post_thumbnail_url($post->ID, 'large'),
+                'thumbnail'       => get_the_post_thumbnail_url($post->ID, 'thumbnail'),
+                'map'             => get_post_meta($post->ID, 'map', true),
+                'is_available'    => $is_available,
+                'preparation_time'=> (int) get_post_meta($post->ID, 'preparation_time', true) ?: 5,
+                'calories'        => (int) get_post_meta($post->ID, 'calories', true),
+                'ingredients'     => get_post_meta($post->ID, 'ingredients', true),
+                'allergens'       => get_post_meta($post->ID, 'allergens', true),
+                'points_value'    => (int) get_post_meta($post->ID, 'points_value', true) ?: 10,
+            );
+        }
     }
 
     /**

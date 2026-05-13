@@ -32,6 +32,9 @@ class Coffee_Shop_Admin {
         add_action('personal_options_update', array($this, 'save_user_profile_fields'));
         add_action('edit_user_profile_update', array($this, 'save_user_profile_fields'));
         add_action('user_register', array($this, 'save_user_profile_fields'));
+
+        // AJAX handlers for media uploads - Temporarily disabled
+        // add_action('wp_ajax_coffee_shop_upload_media', array($this, 'ajax_upload_media'));
     }
 
     /**
@@ -282,7 +285,8 @@ class Coffee_Shop_Admin {
      */
     public function render_menu_item_meta_box($post) {
         wp_nonce_field('coffee_shop_menu_item_meta', 'coffee_shop_menu_item_meta_nonce');
-        
+
+        // Get all meta values
         $price = get_post_meta($post->ID, 'price', true);
         $category = get_post_meta($post->ID, 'category', true);
         $is_available = get_post_meta($post->ID, 'is_available', true);
@@ -436,13 +440,42 @@ class Coffee_Shop_Admin {
 
         $fields = array(
             'price', 'category', 'is_available', 'preparation_time',
-            'calories', 'ingredients', 'allergens', 'points_value'
+            'calories', 'ingredients', 'allergens', 'points_value',
+            'image', 'map', 'color', 'enable_pattern', 'pattern',
+            'image_type', 'enable_flip', 'flip_image'
         );
 
         foreach ($fields as $field) {
             if (isset($_POST[$field])) {
-                update_post_meta($post_id, $field, $_POST[$field]);
+                if (in_array($field, array('is_available', 'enable_pattern', 'enable_flip'))) {
+                    update_post_meta($post_id, $field, $_POST[$field] ? 1 : 0);
+                } else {
+                    update_post_meta($post_id, $field, $_POST[$field]);
+                }
             }
+        }
+
+        // Handle product_description array
+        if (isset($_POST['product_description'])) {
+            update_post_meta($post_id, 'product_description', $_POST['product_description']);
+        }
+
+        // Handle tags array
+        if (isset($_POST['tags'])) {
+            $tags = array_map('trim', explode(',', $_POST['tags']));
+            update_post_meta($post_id, 'tags', $tags);
+        }
+
+        // Handle customization_options
+        if (isset($_POST['customization_options'])) {
+            $options = array();
+            foreach ($_POST['customization_options'] as $option) {
+                if (!empty($option['key'])) {
+                    $values = array_map('trim', explode(',', $option['values']));
+                    $options[$option['key']] = array_filter($values);
+                }
+            }
+            update_post_meta($post_id, 'customization_options', $options);
         }
     }
 
@@ -512,7 +545,6 @@ class Coffee_Shop_Admin {
      * Save user profile fields
      */
     public function save_user_profile_fields($user_id) {
-        // Check permissions
         if (!current_user_can('edit_user', $user_id)) {
             return false;
         }
@@ -528,6 +560,79 @@ class Coffee_Shop_Admin {
                 delete_user_meta($user_id, 'phone');
             }
         }
+    }
+
+    /**
+     * AJAX handler for media uploads
+     */
+    public function ajax_upload_media() {
+        // Check nonce and permissions
+        if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'coffee_shop_admin') && !current_user_can('upload_files')) {
+            wp_die(__('Unauthorized', 'coffee-shop'));
+        }
+
+        if (empty($_FILES) || !isset($_FILES['file'])) {
+            wp_send_json_error(__('No file uploaded', 'coffee-shop'));
+        }
+
+        $file = $_FILES['file'];
+
+        // Validate file
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            wp_send_json_error(__('File upload error', 'coffee-shop'));
+        }
+
+        // Check file type
+        $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+        if (!in_array($file['type'], $allowed_types)) {
+            wp_send_json_error(__('Invalid file type. Only images are allowed.', 'coffee-shop'));
+        }
+
+        // Check file size (max 5MB)
+        $max_size = 5 * 1024 * 1024; // 5MB
+        if ($file['size'] > $max_size) {
+            wp_send_json_error(__('File too large. Maximum size is 5MB.', 'coffee-shop'));
+        }
+
+        // Handle upload
+        $upload_overrides = array(
+            'test_form' => false,
+            'upload_error_handler' => function($file, $message) {
+                wp_send_json_error($message);
+            }
+        );
+
+        $uploaded_file = wp_handle_upload($file, $upload_overrides);
+
+        if (isset($uploaded_file['error'])) {
+            wp_send_json_error($uploaded_file['error']);
+        }
+
+        // Create attachment
+        $attachment_id = wp_insert_attachment(array(
+            'guid'           => $uploaded_file['url'],
+            'post_mime_type' => $uploaded_file['type'],
+            'post_title'     => sanitize_file_name(basename($uploaded_file['file'])),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+        ), $uploaded_file['file']);
+
+        if (is_wp_error($attachment_id)) {
+            wp_send_json_error($attachment_id->get_error_message());
+        }
+
+        // Generate metadata
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $uploaded_file['file']);
+        wp_update_attachment_metadata($attachment_id, $attachment_data);
+
+        $attachment_url = wp_get_attachment_url($attachment_id);
+
+        wp_send_json_success(array(
+            'id' => $attachment_id,
+            'url' => $attachment_url,
+            'filename' => basename($uploaded_file['file']),
+        ));
     }
 }
 

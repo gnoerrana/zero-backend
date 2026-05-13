@@ -66,9 +66,9 @@ abstract class Coffee_Shop_REST_Controller extends WP_REST_Controller {
 
         list($header, $payload, $signature) = $parts;
         
-        // Verify signature
-        $expected_signature = base64_encode(hash_hmac('sha256', "$header.$payload", $secret, true));
-        
+        // Verify signature - JWT uses base64url encoding
+        $expected_signature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(hash_hmac('sha256', "$header.$payload", $secret, true)));
+
         if ($signature !== $expected_signature) {
             return new WP_Error(
                 'invalid_signature',

@@ -1,0 +1,82 @@
+/* Frontend Styles for Customizations */
+
+.csc-frontend-dashboard {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.csc-frontend-dashboard h2 {
+    margin-bottom: 30px;
+}
+
+.csc-customizations-list {
+    margin-bottom: 20px;
+}
+
+.csc-customization-item {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.csc-field-group {
+    margin-bottom: 15px;
+}
+
+.csc-field-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.csc-field-group input[type="text"],
+.csc-field-group input[type="number"] {
+    width: 100%;
+    max-width: 300px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.csc-field-group select {
+    width: 100%;
+    max-width: 300px;
+    height: 120px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.csc-remove-item {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #dc3232;
+    color: #fff;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.csc-remove-item:hover {
+    background: #c62828;
+}
+
+#csc-frontend-add-item {
+    margin-top: 10px;
+}
+
+.csc-save-section {
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+#csc-frontend-save-status {
+    margin-left: 10px;
+    font-style: italic;
+}
