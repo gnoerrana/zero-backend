@@ -147,10 +147,18 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             }
 
             // Save new meta fields
-            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'pattern', 'image_type', 'enable_flip', 'flip_image');
+            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'pattern', 'image_type', 'enable_flip', 'flip_image', 'manage_stock', 'stock_quantity');
             foreach ($new_meta_fields as $field) {
                 if ($request->get_param($field) !== null) {
-                    update_post_meta($post_id, $field, $request->get_param($field));
+                    if ($field === 'stock_quantity') {
+                        $value = intval($request->get_param($field));
+                        if ($value < 0) {
+                            return $this->format_error(__('Stock quantity must be a non-negative integer', 'coffee-shop'), 'invalid_stock_quantity', 400);
+                        }
+                        update_post_meta($post_id, $field, $value);
+                    } else {
+                        update_post_meta($post_id, $field, $request->get_param($field));
+                    }
                 }
             }
 
@@ -252,10 +260,18 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             wp_update_post($post_data);
 
             // Update new meta fields
-            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'pattern', 'image_type', 'enable_flip', 'flip_image');
+            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'pattern', 'image_type', 'enable_flip', 'flip_image', 'manage_stock', 'stock_quantity');
             foreach ($new_meta_fields as $field) {
                 if ($request->get_param($field) !== null) {
-                    update_post_meta($post->ID, $field, $request->get_param($field));
+                    if ($field === 'stock_quantity') {
+                        $value = intval($request->get_param($field));
+                        if ($value < 0) {
+                            return $this->format_error(__('Stock quantity must be a non-negative integer', 'coffee-shop'), 'invalid_stock_quantity', 400);
+                        }
+                        update_post_meta($post->ID, $field, $value);
+                    } else {
+                        update_post_meta($post->ID, $field, $request->get_param($field));
+                    }
                 }
             }
 
@@ -385,7 +401,7 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
     public function get_popular_items($request) {
         // Get items ordered by order count
         global $wpdb;
-        
+
         $results = $wpdb->get_results(
             "SELECT pm.meta_value as menu_item_id, COUNT(*) as order_count
             FROM {$wpdb->postmeta} pm
@@ -420,7 +436,7 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             }
         }
 
-return $this->format_response($items);
+        return $this->format_response($items);
     }
 
     /**
@@ -456,6 +472,8 @@ return $this->format_response($items);
                 'image_type'          => get_post_meta($post->ID, 'image_type', true),
                 'enable_flip'         => (bool) get_post_meta($post->ID, 'enable_flip', true),
                 'flip_image'          => get_post_meta($post->ID, 'flip_image', true),
+                'manage_stock'        => (bool) get_post_meta($post->ID, 'manage_stock', true),
+                'stock_quantity'      => (int) get_post_meta($post->ID, 'stock_quantity', true),
             );
         } else {
             // Legacy format
@@ -480,6 +498,8 @@ return $this->format_response($items);
                 'ingredients'     => get_post_meta($post->ID, 'ingredients', true),
                 'allergens'       => get_post_meta($post->ID, 'allergens', true),
                 'points_value'    => (int) get_post_meta($post->ID, 'points_value', true) ?: 10,
+                'manage_stock'    => (bool) get_post_meta($post->ID, 'manage_stock', true),
+                'stock_quantity'  => (int) get_post_meta($post->ID, 'stock_quantity', true),
             );
         }
     }

@@ -57,10 +57,12 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-location.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-reward.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-promotion.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-special-section.php';
 
         // Taxonomies
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/taxonomies/class-menu-category.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/taxonomies/class-promotion-category.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/taxonomies/class-special-section-category.php';
 
         // User Roles
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/user-roles/class-user-roles.php';
@@ -72,14 +74,15 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-locations-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-rewards-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-promotions-controller.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-special-section-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-dashboard-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-users-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-media-controller.php';
 
-        // Admin - Temporarily disabled to debug upload.php error
-        // if (is_admin()) {
-        //     require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/class-admin.php';
-        // }
+// Admin
+         if (is_admin()) {
+             require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/class-admin.php';
+         }
     }
 
     /**
@@ -117,10 +120,11 @@ final class Coffee_Shop_Core {
         Coffee_Shop_Location::register();
         Coffee_Shop_Reward::register();
         Coffee_Shop_Promotion::register();
+        Coffee_Shop_Special_Section::register();
 
         // Force classic editor for menu_item and promotion post types
         add_filter('use_block_editor_for_post_type', function($use_block_editor, $post_type) {
-            if (in_array($post_type, ['menu_item', 'promotion'])) {
+            if (in_array($post_type, ['menu_item', 'promotion', 'special_section'])) {
                 return false;
             }
             return $use_block_editor;
@@ -129,6 +133,7 @@ final class Coffee_Shop_Core {
         // Register taxonomies
         Coffee_Shop_Menu_Category::register();
         Coffee_Shop_Promotion_Category::register();
+        Coffee_Shop_Special_Section_Category::register();
 
         // Initialize user roles
         Coffee_Shop_User_Roles::init();
@@ -144,13 +149,14 @@ final class Coffee_Shop_Core {
     /**
      * Initialize REST API
      */
-    public function init_rest_api() {
+public function init_rest_api() {
         $controllers = array(
             'Coffee_Shop_Orders_Controller',
             'Coffee_Shop_Menu_Controller',
             'Coffee_Shop_Locations_Controller',
             'Coffee_Shop_Rewards_Controller',
             'Coffee_Shop_Promotions_Controller',
+            'Coffee_Shop_Special_Section_Controller',
             'Coffee_Shop_Dashboard_Controller',
             'Coffee_Shop_Users_Controller',
             'Coffee_Shop_Media_Controller',

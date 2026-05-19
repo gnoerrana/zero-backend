@@ -17,10 +17,13 @@ class Coffee_Shop_Admin {
         add_action('manage_order_posts_custom_column', array($this, 'order_column_content'), 10, 2);
         add_filter('manage_menu_item_posts_columns', array($this, 'menu_item_columns'));
         add_action('manage_menu_item_posts_custom_column', array($this, 'menu_item_column_content'), 10, 2);
+        add_filter('manage_special_section_posts_columns', array($this, 'special_section_columns'));
+        add_action('manage_special_section_posts_custom_column', array($this, 'special_section_column_content'), 10, 2);
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
         add_action('save_post_order', array($this, 'save_order_meta'));
         add_action('save_post_menu_item', array($this, 'save_menu_item_meta'));
         add_action('save_post_promotion', array($this, 'save_promotion_meta'));
+        add_action('save_post_special_section', array($this, 'save_special_section_meta'));
 
         // Ensure user roles are available
         add_action('admin_init', array($this, 'ensure_user_roles'));
@@ -61,13 +64,22 @@ class Coffee_Shop_Admin {
             'coffee-shop-settings',
             array($this, 'render_settings')
         );
+
+        // Special Section
+        add_submenu_page(
+            'coffee-shop-dashboard',
+            __('Special Sections', 'coffee-shop'),
+            __('Special Sections', 'coffee-shop'),
+            'manage_options',
+            'edit.php?post_type=special_section'
+        );
     }
 
     /**
      * Enqueue admin scripts
      */
     public function enqueue_scripts($hook) {
-        if (strpos($hook, 'coffee-shop') !== false) {
+        if (strpos($hook, 'coffee-shop') !== false || strpos($hook, 'special_section') !== false) {
             wp_enqueue_style(
                 'coffee-shop-admin',
                 COFFEE_SHOP_PLUGIN_URL . 'assets/css/admin.css',
@@ -201,6 +213,39 @@ class Coffee_Shop_Admin {
     }
 
     /**
+     * Custom columns for special sections
+     */
+    public function special_section_columns($columns) {
+        $new_columns = array(
+            'cb'            => $columns['cb'],
+            'title'         => __('Title', 'coffee-shop'),
+            'category'      => __('Category', 'coffee-shop'),
+            'description_en' => __('Description (EN)', 'coffee-shop'),
+            'date'          => __('Date', 'coffee-shop'),
+        );
+        return $new_columns;
+    }
+
+    /**
+     * Special section column content
+     */
+    public function special_section_column_content($column, $post_id) {
+        switch ($column) {
+            case 'description_en':
+                $desc = get_post_meta($post_id, 'description_en', true);
+                echo esc_html(wp_trim_words($desc, 10, '...'));
+                break;
+            case 'category':
+                $terms = wp_get_post_terms($post_id, 'special_section_category');
+                if (!empty($terms)) {
+                    $names = wp_list_pluck($terms, 'name');
+                    echo esc_html(implode(', ', $names));
+                }
+                break;
+        }
+    }
+
+    /**
      * Add meta boxes
      */
     public function add_meta_boxes() {
@@ -254,6 +299,16 @@ class Coffee_Shop_Admin {
             'high'
         );
 
+        // Special section details
+        add_meta_box(
+            'special_section_details',
+            __('Section Details', 'coffee-shop'),
+            array($this, 'render_special_section_meta_box'),
+            'special_section',
+            'normal',
+            'high'
+        );
+
         // Add user role verification on admin pages
         add_action('admin_notices', array($this, 'check_user_roles'));
     }
@@ -263,7 +318,7 @@ class Coffee_Shop_Admin {
      */
     public function render_order_meta_box($post) {
         wp_nonce_field('coffee_shop_order_meta', 'coffee_shop_order_meta_nonce');
-        
+
         $customer_name = get_post_meta($post->ID, 'customer_name', true);
         $customer_email = get_post_meta($post->ID, 'customer_email', true);
         $customer_phone = get_post_meta($post->ID, 'customer_phone', true);
@@ -286,7 +341,6 @@ class Coffee_Shop_Admin {
     public function render_menu_item_meta_box($post) {
         wp_nonce_field('coffee_shop_menu_item_meta', 'coffee_shop_menu_item_meta_nonce');
 
-        // Get all meta values
         $price = get_post_meta($post->ID, 'price', true);
         $category = get_post_meta($post->ID, 'category', true);
         $is_available = get_post_meta($post->ID, 'is_available', true);
@@ -304,7 +358,7 @@ class Coffee_Shop_Admin {
      */
     public function render_location_meta_box($post) {
         wp_nonce_field('coffee_shop_location_meta', 'coffee_shop_location_meta_nonce');
-        
+
         $floor = get_post_meta($post->ID, 'floor', true);
         $building = get_post_meta($post->ID, 'building', true);
         $address = get_post_meta($post->ID, 'address', true);
@@ -323,7 +377,7 @@ class Coffee_Shop_Admin {
      */
     public function render_reward_meta_box($post) {
         wp_nonce_field('coffee_shop_reward_meta', 'coffee_shop_reward_meta_nonce');
-        
+
         $points_required = get_post_meta($post->ID, 'points_required', true);
         $category = get_post_meta($post->ID, 'category', true);
         $reward_type = get_post_meta($post->ID, 'reward_type', true);
@@ -343,7 +397,7 @@ class Coffee_Shop_Admin {
      */
     public function render_promotion_meta_box($post) {
         wp_nonce_field('coffee_shop_promotion_meta', 'coffee_shop_promotion_meta_nonce');
-        
+
         $subtitle_en = get_post_meta($post->ID, 'subtitle_en', true);
         $subtitle_id = get_post_meta($post->ID, 'subtitle_id', true);
         $description_en = get_post_meta($post->ID, 'description_en', true);
@@ -354,6 +408,20 @@ class Coffee_Shop_Admin {
         $is_active = get_post_meta($post->ID, 'is_active', true);
 
         include COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/views/meta-boxes/promotion.php';
+    }
+
+    /**
+     * Render special section meta box
+     */
+    public function render_special_section_meta_box($post) {
+        wp_nonce_field('coffee_shop_special_section_meta', 'coffee_shop_special_section_meta_nonce');
+
+        $description_en = get_post_meta($post->ID, 'description_en', true);
+        $description_id = get_post_meta($post->ID, 'description_id', true);
+        $category = wp_get_post_terms($post->ID, 'special_section_category');
+        $selected_category = !empty($category) ? $category[0]->term_id : 0;
+
+        include COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/views/meta-boxes/special-section.php';
     }
 
     /**
@@ -368,13 +436,11 @@ class Coffee_Shop_Admin {
      * Check if custom user roles exist and show notice if needed
      */
     public function check_user_roles() {
-        // Only show on user-related pages
         $screen = get_current_screen();
         if (!$screen || !in_array($screen->id, array('users', 'user-new', 'coffee-shop-settings'))) {
             return;
         }
 
-        // Check if roles exist
         $store_admin_role = get_role('store_admin');
         $cashier_role = get_role('cashier');
 
@@ -385,7 +451,6 @@ class Coffee_Shop_Admin {
             echo '</p>';
             echo '</div>';
 
-            // Try to create roles
             Coffee_Shop_User_Roles::register_custom_roles();
         }
     }
@@ -455,18 +520,15 @@ class Coffee_Shop_Admin {
             }
         }
 
-        // Handle product_description array
         if (isset($_POST['product_description'])) {
             update_post_meta($post_id, 'product_description', $_POST['product_description']);
         }
 
-        // Handle tags array
         if (isset($_POST['tags'])) {
             $tags = array_map('trim', explode(',', $_POST['tags']));
             update_post_meta($post_id, 'tags', $tags);
         }
 
-        // Handle customization_options
         if (isset($_POST['customization_options'])) {
             $options = array();
             foreach ($_POST['customization_options'] as $option) {
@@ -509,17 +571,46 @@ class Coffee_Shop_Admin {
     }
 
     /**
+     * Save special section meta
+     */
+    public function save_special_section_meta($post_id) {
+        if (!isset($_POST['coffee_shop_special_section_meta_nonce']) ||
+            !wp_verify_nonce($_POST['coffee_shop_special_section_meta_nonce'], 'coffee_shop_special_section_meta')) {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        $description_en = isset($_POST['description_en']) ? wp_kses_post($_POST['description_en']) : '';
+        $description_id = isset($_POST['description_id']) ? wp_kses_post($_POST['description_id']) : '';
+
+        update_post_meta($post_id, 'description_en', $description_en);
+        update_post_meta($post_id, 'description_id', $description_id);
+
+        // Handle category taxonomy
+        if (isset($_POST['special_section_category'])) {
+            $category_id = intval($_POST['special_section_category']);
+            if ($category_id > 0) {
+                wp_set_object_terms($post_id, $category_id, 'special_section_category');
+            }
+        }
+    }
+
+    /**
      * Add user profile fields
      */
     public function add_user_profile_fields($user) {
-        // Check if we're on the add new user page
         $is_new_user = !isset($user->ID);
 
         if ($is_new_user) {
-            // For new user form
             $phone = '';
         } else {
-            // For existing user
             $phone = get_user_meta($user->ID, 'phone', true);
         }
         ?>
@@ -549,11 +640,9 @@ class Coffee_Shop_Admin {
             return false;
         }
 
-        // Check if phone field is set
         if (isset($_POST['phone'])) {
             $phone = sanitize_text_field($_POST['phone']);
 
-            // Save or delete the phone number
             if (!empty($phone)) {
                 update_user_meta($user_id, 'phone', $phone);
             } else {
@@ -566,7 +655,6 @@ class Coffee_Shop_Admin {
      * AJAX handler for media uploads
      */
     public function ajax_upload_media() {
-        // Check nonce and permissions
         if (!wp_verify_nonce($_POST['_wpnonce'] ?? '', 'coffee_shop_admin') && !current_user_can('upload_files')) {
             wp_die(__('Unauthorized', 'coffee-shop'));
         }
@@ -577,24 +665,20 @@ class Coffee_Shop_Admin {
 
         $file = $_FILES['file'];
 
-        // Validate file
         if ($file['error'] !== UPLOAD_ERR_OK) {
             wp_send_json_error(__('File upload error', 'coffee-shop'));
         }
 
-        // Check file type
         $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
         if (!in_array($file['type'], $allowed_types)) {
             wp_send_json_error(__('Invalid file type. Only images are allowed.', 'coffee-shop'));
         }
 
-        // Check file size (max 5MB)
-        $max_size = 5 * 1024 * 1024; // 5MB
+        $max_size = 5 * 1024 * 1024;
         if ($file['size'] > $max_size) {
             wp_send_json_error(__('File too large. Maximum size is 5MB.', 'coffee-shop'));
         }
 
-        // Handle upload
         $upload_overrides = array(
             'test_form' => false,
             'upload_error_handler' => function($file, $message) {
@@ -608,7 +692,6 @@ class Coffee_Shop_Admin {
             wp_send_json_error($uploaded_file['error']);
         }
 
-        // Create attachment
         $attachment_id = wp_insert_attachment(array(
             'guid'           => $uploaded_file['url'],
             'post_mime_type' => $uploaded_file['type'],
@@ -621,7 +704,6 @@ class Coffee_Shop_Admin {
             wp_send_json_error($attachment_id->get_error_message());
         }
 
-        // Generate metadata
         require_once(ABSPATH . 'wp-admin/includes/image.php');
         $attachment_data = wp_generate_attachment_metadata($attachment_id, $uploaded_file['file']);
         wp_update_attachment_metadata($attachment_id, $attachment_data);
