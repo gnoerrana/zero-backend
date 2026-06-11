@@ -125,4 +125,28 @@ abstract class Coffee_Shop_REST_Controller extends WP_REST_Controller {
     protected function format_error($message, $code = 'error', $status = 400) {
         return new WP_Error($code, $message, array('status' => $status));
     }
+
+    /**
+     * Get boolean meta value
+     * Ensures consistent boolean/int return (1 for true, 0 for false)
+     */
+    protected function get_boolean_meta($post_id, $meta_key) {
+        $value = get_post_meta($post_id, $meta_key, true);
+        
+        // Handle various possible stored formats
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+            return in_array($value, array('1', 'true', 'yes', 'on')) ? 1 : 0;
+        }
+        
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+        
+        return 0;
+    }
 }

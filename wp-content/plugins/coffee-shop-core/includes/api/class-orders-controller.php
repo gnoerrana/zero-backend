@@ -43,11 +43,24 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
                     ),
                 ),
             ),
+        ));
+
+        // Update order
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/(?P<id>\d+)/update', array(
             array(
                 'methods'             => WP_REST_Server::EDITABLE,
                 'callback'            => array($this, 'update_item'),
                 'permission_callback' => array($this, 'update_item_permissions_check'),
                 'args'                => $this->get_endpoint_args_for_item_schema(WP_REST_Server::EDITABLE),
+            ),
+        ));
+
+        // Delete order
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/(?P<id>\d+)', array(
+            array(
+                'methods'             => WP_REST_Server::DELETABLE,
+                'callback'            => array($this, 'delete_item'),
+                'permission_callback' => array($this, 'delete_item_permissions_check'),
             ),
         ));
 
@@ -265,6 +278,25 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
     }
 
     /**
+     * Delete order
+     */
+    public function delete_item($request) {
+        $order = get_post($request['id']);
+
+        if (!$order || $order->post_type !== 'order') {
+            return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
+        }
+
+        $result = wp_delete_post($order->ID, true);
+
+        if (!$result) {
+            return $this->format_error(__('Order could not be deleted', 'coffee-shop'), 'delete_failed', 500);
+        }
+
+        return $this->format_response(null, __('Order deleted successfully', 'coffee-shop'), 200);
+    }
+
+    /**
      * Prepare item for response
      */
     public function prepare_item_for_response($post, $request) {
@@ -353,6 +385,10 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
     }
 
     public function update_item_permissions_check($request) {
+        return current_user_can('manage_options');
+    }
+
+    public function delete_item_permissions_check($request) {
         return current_user_can('manage_options');
     }
 

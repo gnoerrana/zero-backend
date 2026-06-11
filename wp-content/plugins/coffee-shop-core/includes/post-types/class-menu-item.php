@@ -181,6 +181,13 @@ class Coffee_Shop_Menu_Item {
                 'show_in_rest' => true,
                 'default'      => false,
             ),
+            'ordering_num' => array(
+                'type'         => 'integer',
+                'description'  => __('Ordering number', 'coffee-shop'),
+                'single'       => true,
+                'show_in_rest' => true,
+                'default'      => 0,
+            ),
             'pattern' => array(
                 'type'         => 'string',
                 'description'  => __('Pattern type', 'coffee-shop'),

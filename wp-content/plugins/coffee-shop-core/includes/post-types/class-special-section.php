@@ -69,6 +69,24 @@ class Coffee_Shop_Special_Section {
                 'single'            => true,
                 'show_in_rest'      => true,
             ),
+            'special_section_enabled' => array(
+                'type'              => 'boolean',
+                'description'       => __('Enable this section', 'coffee-shop'),
+                'single'            => true,
+                'show_in_rest'      => true,
+            ),
+            'special_section_allow_media' => array(
+                'type'              => 'boolean',
+                'description'       => __('Allow media upload for this section', 'coffee-shop'),
+                'single'            => true,
+                'show_in_rest'      => true,
+            ),
+            'special_section_image' => array(
+                'type'              => 'string',
+                'description'       => __('Image URL for this section', 'coffee-shop'),
+                'single'            => true,
+                'show_in_rest'      => true,
+            ),
         );
 
         foreach ($meta_fields as $meta_key => $args) {

@@ -141,6 +141,25 @@ class Coffee_Shop_Special_Section_Controller extends Coffee_Shop_REST_Controller
             update_post_meta($post_id, 'description_id', $description_id);
         }
 
+        // Save new meta fields
+        $special_section_enabled = isset($request['special_section_enabled']) ? 1 : 0;
+        $special_section_allow_media = isset($request['special_section_allow_media']) ? 1 : 0;
+        $special_section_image = isset($request['special_section_image']) ? esc_url_raw($request['special_section_image']) : '';
+        $special_section_image_2 = isset($request['special_section_image_2']) ? esc_url_raw($request['special_section_image_2']) : '';
+        $special_section_image_3 = isset($request['special_section_image_3']) ? esc_url_raw($request['special_section_image_3']) : '';
+        $special_section_image_4 = isset($request['special_section_image_4']) ? esc_url_raw($request['special_section_image_4']) : '';
+        $slide_title = isset($request['slide_title']) ? sanitize_text_field($request['slide_title']) : '';
+        $color_scheme = isset($request['color_scheme']) ? sanitize_hex_color($request['color_scheme']) : '';
+
+        update_post_meta($post_id, 'special_section_enabled', $special_section_enabled);
+        update_post_meta($post_id, 'special_section_allow_media', $special_section_allow_media);
+        update_post_meta($post_id, 'special_section_image', $special_section_image);
+        update_post_meta($post_id, 'special_section_image_2', $special_section_image_2);
+        update_post_meta($post_id, 'special_section_image_3', $special_section_image_3);
+        update_post_meta($post_id, 'special_section_image_4', $special_section_image_4);
+        update_post_meta($post_id, 'slide_title', $slide_title);
+        update_post_meta($post_id, 'color_scheme', $color_scheme);
+
         // Handle featured image
         if ($image_id = $request->get_param('image_id')) {
             set_post_thumbnail($post_id, intval($image_id));
@@ -186,6 +205,39 @@ class Coffee_Shop_Special_Section_Controller extends Coffee_Shop_REST_Controller
 
         if ($request->has_param('description_id')) {
             update_post_meta($post->ID, 'description_id', wp_kses_post($request->get_param('description_id')));
+        }
+
+        // Update new meta fields
+        if ($request->has_param('special_section_enabled')) {
+            update_post_meta($post->ID, 'special_section_enabled', intval($request->get_param('special_section_enabled')));
+        }
+
+        if ($request->has_param('special_section_allow_media')) {
+            update_post_meta($post->ID, 'special_section_allow_media', intval($request->get_param('special_section_allow_media')));
+        }
+
+        if ($request->has_param('special_section_image')) {
+            update_post_meta($post->ID, 'special_section_image', esc_url_raw($request->get_param('special_section_image')));
+        }
+
+        if ($request->has_param('special_section_image_2')) {
+            update_post_meta($post->ID, 'special_section_image_2', esc_url_raw($request->get_param('special_section_image_2')));
+        }
+
+        if ($request->has_param('special_section_image_3')) {
+            update_post_meta($post->ID, 'special_section_image_3', esc_url_raw($request->get_param('special_section_image_3')));
+        }
+
+        if ($request->has_param('special_section_image_4')) {
+            update_post_meta($post->ID, 'special_section_image_4', esc_url_raw($request->get_param('special_section_image_4')));
+        }
+
+        if ($request->has_param('slide_title')) {
+            update_post_meta($post->ID, 'slide_title', sanitize_text_field($request->get_param('slide_title')));
+        }
+
+        if ($request->has_param('color_scheme')) {
+            update_post_meta($post->ID, 'color_scheme', sanitize_hex_color($request->get_param('color_scheme')));
         }
 
         wp_update_post($post_data);
@@ -269,6 +321,14 @@ class Coffee_Shop_Special_Section_Controller extends Coffee_Shop_REST_Controller
             'description_id'  => get_post_meta($post->ID, 'description_id', true) ?: '',
             'image'           => $image_id ? wp_get_attachment_url($image_id) : null,
             'image_id'        => $image_id ? intval($image_id) : 0,
+            'special_section_enabled' => $this->get_boolean_meta($post->ID, 'special_section_enabled'),
+            'special_section_allow_media' => $this->get_boolean_meta($post->ID, 'special_section_allow_media'),
+            'special_section_image' => get_post_meta($post->ID, 'special_section_image', true) ?: '',
+            'special_section_image_2' => get_post_meta($post->ID, 'special_section_image_2', true) ?: '',
+            'special_section_image_3' => get_post_meta($post->ID, 'special_section_image_3', true) ?: '',
+            'special_section_image_4' => get_post_meta($post->ID, 'special_section_image_4', true) ?: '',
+            'slide_title' => get_post_meta($post->ID, 'slide_title', true) ?: '',
+            'color_scheme' => get_post_meta($post->ID, 'color_scheme', true) ?: '',
             'categories'      => wp_list_pluck($categories, 'term_id'),
             'category_names'  => wp_list_pluck($categories, 'name'),
             'slug'            => $post->post_name,

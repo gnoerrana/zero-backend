@@ -168,11 +168,13 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
 
         $args = array(
             'post_type'      => 'attachment',
-            'post_mime_type' => 'image',
             'post_status'    => 'inherit',
             'posts_per_page' => $request->get_param('per_page') ?: 20,
             'paged'          => $request->get_param('page') ?: 1,
         );
+
+        // Add mime type filter for images including SVG
+        $args['post_mime_type'] = array('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml');
 
         $query = new WP_Query($args);
         $items = array();
@@ -252,7 +254,7 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
         }
 
         // Check file type
-        $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+        $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml');
         if (!in_array($file['type'], $allowed_types)) {
             return $this->format_error(__('Invalid file type. Only images are allowed.', 'coffee-shop'), 'invalid_type', 400);
         }
@@ -260,7 +262,7 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
         // Check file size (max 10MB)
         $max_size = 10 * 1024 * 1024; // 10MB
         if ($file['size'] > $max_size) {
-            return $this->format_error(__('File too large. Maximum size is 5MB.', 'coffee-shop'), 'file_too_large', 400);
+            return $this->format_error(__('File too large. Maximum size is 10MB.', 'coffee-shop'), 'file_too_large', 400);
         }
 
         // Handle upload
@@ -334,8 +336,6 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
      * Prepare item for response
      */
     public function prepare_item_for_response($post, $request) {
-        $sizes = get_intermediate_image_sizes();
-
         $data = array(
             'id'          => $post->ID,
             'title'       => $post->post_title,
@@ -347,21 +347,27 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
             'sizes'       => array(),
         );
 
-        // Add image sizes
-        $metadata = wp_get_attachment_metadata($post->ID);
-        if (isset($metadata['sizes'])) {
-            foreach ($sizes as $size) {
-                if (isset($metadata['sizes'][$size])) {
-                    $data['sizes'][$size] = array(
-                        'url'    => wp_get_attachment_image_url($post->ID, $size),
-                        'width'  => $metadata['sizes'][$size]['width'],
-                        'height' => $metadata['sizes'][$size]['height'],
-                    );
+        // For SVG files, we don't generate intermediate sizes the same way
+        if ($post->post_mime_type !== 'image/svg+xml') {
+            $sizes = get_intermediate_image_sizes();
+            
+            // Add image sizes
+            $metadata = wp_get_attachment_metadata($post->ID);
+            if (isset($metadata['sizes'])) {
+                foreach ($sizes as $size) {
+                    if (isset($metadata['sizes'][$size])) {
+                        $data['sizes'][$size] = array(
+                            'url'    => wp_get_attachment_image_url($post->ID, $size),
+                            'width'  => $metadata['sizes'][$size]['width'],
+                            'height' => $metadata['sizes'][$size]['height'],
+                        );
+                    }
                 }
             }
         }
 
         // Add full size
+        $metadata = wp_get_attachment_metadata($post->ID);
         $data['sizes']['full'] = array(
             'url'    => wp_get_attachment_url($post->ID),
             'width'  => isset($metadata['width']) ? $metadata['width'] : null,

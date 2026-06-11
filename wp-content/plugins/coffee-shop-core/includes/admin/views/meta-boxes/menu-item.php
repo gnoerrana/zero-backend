@@ -23,6 +23,7 @@ $color = get_post_meta($post->ID, 'color', true);
 $customization_options = get_post_meta($post->ID, 'customization_options', true) ?: array();
 $tags = get_post_meta($post->ID, 'tags', true) ?: array();
 $enable_pattern = get_post_meta($post->ID, 'enable_pattern', true);
+$ordering_num = get_post_meta($post->ID, 'ordering_num', true);
 $pattern = get_post_meta($post->ID, 'pattern', true);
 $image_type = get_post_meta($post->ID, 'image_type', true);
 $enable_flip = get_post_meta($post->ID, 'enable_flip', true);
@@ -165,6 +166,14 @@ $flip_image = get_post_meta($post->ID, 'flip_image', true);
         <td>
             <input type="text" id="tags" name="tags" value="<?php echo esc_attr(is_array($tags) ? implode(', ', $tags) : $tags); ?>" class="regular-text">
             <p class="description"><?php _e('Comma-separated list of tags', 'coffee-shop'); ?></p>
+        </td>
+    </tr>
+
+    <tr>
+        <th><label for="ordering_num"><?php _e('Ordering Number', 'coffee-shop'); ?></label></th>
+        <td>
+            <input type="number" id="ordering_num" name="ordering_num" value="<?php echo esc_attr($ordering_num); ?>" class="small-text">
+            <p class="description"><?php _e('Number to determine the order of the product', 'coffee-shop'); ?></p>
         </td>
     </tr>
 

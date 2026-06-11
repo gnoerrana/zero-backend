@@ -107,7 +107,7 @@ class CSC_Customizations_API {
             array(
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => array($this, 'get_product_custom_options'),
-                'permission_callback' => array($this, 'get_permissions_check'),
+                // 'permission_callback' => array($this, 'get_permissions_check'),
                 'args' => array(
                     'product_id' => array(
                         'required' => true,

@@ -36,8 +36,11 @@ class Coffee_Shop_Admin {
         add_action('edit_user_profile_update', array($this, 'save_user_profile_fields'));
         add_action('user_register', array($this, 'save_user_profile_fields'));
 
-        // AJAX handlers for media uploads - Temporarily disabled
-        // add_action('wp_ajax_coffee_shop_upload_media', array($this, 'ajax_upload_media'));
+        // Allow SVG uploads
+        add_filter('upload_mimes', array($this, 'allow_svg_upload'));
+
+        // AJAX handlers for media uploads
+        add_action('wp_ajax_coffee_shop_upload_media', array($this, 'ajax_upload_media'));
     }
 
     /**
@@ -344,6 +347,7 @@ class Coffee_Shop_Admin {
         $price = get_post_meta($post->ID, 'price', true);
         $category = get_post_meta($post->ID, 'category', true);
         $is_available = get_post_meta($post->ID, 'is_available', true);
+        $ordering_num = get_post_meta($post->ID, 'ordering_num', true);
         $preparation_time = get_post_meta($post->ID, 'preparation_time', true);
         $calories = get_post_meta($post->ID, 'calories', true);
         $ingredients = get_post_meta($post->ID, 'ingredients', true);
@@ -418,6 +422,14 @@ class Coffee_Shop_Admin {
 
         $description_en = get_post_meta($post->ID, 'description_en', true);
         $description_id = get_post_meta($post->ID, 'description_id', true);
+        $enabled = get_post_meta($post->ID, 'special_section_enabled', true);
+        $allow_media = get_post_meta($post->ID, 'special_section_allow_media', true);
+        $image = get_post_meta($post->ID, 'special_section_image', true);
+        $image_2 = get_post_meta($post->ID, 'special_section_image_2', true);
+        $image_3 = get_post_meta($post->ID, 'special_section_image_3', true);
+        $image_4 = get_post_meta($post->ID, 'special_section_image_4', true);
+        $slide_title = get_post_meta($post->ID, 'slide_title', true);
+        $color_scheme = get_post_meta($post->ID, 'color_scheme', true);
         $category = wp_get_post_terms($post->ID, 'special_section_category');
         $selected_category = !empty($category) ? $category[0]->term_id : 0;
 
@@ -507,12 +519,12 @@ class Coffee_Shop_Admin {
             'price', 'category', 'is_available', 'preparation_time',
             'calories', 'ingredients', 'allergens', 'points_value',
             'image', 'map', 'color', 'enable_pattern', 'pattern',
-            'image_type', 'enable_flip', 'flip_image'
+            'image_type', 'enable_flip', 'flip_image', 'ordering_num'
         );
 
         foreach ($fields as $field) {
             if (isset($_POST[$field])) {
-                if (in_array($field, array('is_available', 'enable_pattern', 'enable_flip'))) {
+                if (in_array($field, array('is_available', 'enable_pattern', 'ordering_num','enable_flip'))) {
                     update_post_meta($post_id, $field, $_POST[$field] ? 1 : 0);
                 } else {
                     update_post_meta($post_id, $field, $_POST[$field]);
@@ -589,9 +601,24 @@ class Coffee_Shop_Admin {
 
         $description_en = isset($_POST['description_en']) ? wp_kses_post($_POST['description_en']) : '';
         $description_id = isset($_POST['description_id']) ? wp_kses_post($_POST['description_id']) : '';
+        $special_section_enabled = isset($_POST['special_section_enabled']) ? 1 : 0;
+        $special_section_allow_media = isset($_POST['special_section_allow_media']) ? 1 : 0;
+        $special_section_image = isset($_POST['special_section_image']) ? esc_url_raw($_POST['special_section_image']) : '';
+        $special_section_image_2 = isset($_POST['special_section_image_2']) ? esc_url_raw($_POST['special_section_image_2']) : '';
+        $special_section_image_3 = isset($_POST['special_section_image_3']) ? esc_url_raw($_POST['special_section_image_3']) : '';
+        $special_section_image_4 = isset($_POST['special_section_image_4']) ? esc_url_raw($_POST['special_section_image_4']) : '';
+        $slide_title = isset($_POST['slide_title']) ? sanitize_text_field($_POST['slide_title']) : '';
 
         update_post_meta($post_id, 'description_en', $description_en);
         update_post_meta($post_id, 'description_id', $description_id);
+        update_post_meta($post_id, 'special_section_enabled', $special_section_enabled);
+        update_post_meta($post_id, 'special_section_allow_media', $special_section_allow_media);
+        update_post_meta($post_id, 'special_section_image', $special_section_image);
+        update_post_meta($post_id, 'special_section_image_2', $special_section_image_2);
+        update_post_meta($post_id, 'special_section_image_3', $special_section_image_3);
+        update_post_meta($post_id, 'special_section_image_4', $special_section_image_4);
+        update_post_meta($post_id, 'slide_title', $slide_title);
+        update_post_meta($post_id, 'color_scheme', $color_scheme);
 
         // Handle category taxonomy
         if (isset($_POST['special_section_category'])) {
@@ -715,6 +742,17 @@ class Coffee_Shop_Admin {
             'url' => $attachment_url,
             'filename' => basename($uploaded_file['file']),
         ));
+    }
+
+    /**
+     * Allow SVG uploads
+     * 
+     * @param array $mimes
+     * @return array
+     */
+    public function allow_svg_upload($mimes) {
+        $mimes['svg'] = 'image/svg+xml';
+        return $mimes;
     }
 }
 
