@@ -22,6 +22,8 @@ require_once CSC_PLUGIN_DIR . 'includes/class-customizations-db.php';
 require_once CSC_PLUGIN_DIR . 'includes/class-customizations-admin.php';
 require_once CSC_PLUGIN_DIR . 'includes/class-customizations-api.php';
 require_once CSC_PLUGIN_DIR . 'includes/class-customizations-frontend.php';
+require_once CSC_PLUGIN_DIR . 'includes/class-payment-method-admin.php';
+require_once CSC_PLUGIN_DIR . 'includes/class-payment-method-api.php';
 
 /**
  * Main Plugin Class
@@ -52,6 +54,16 @@ class CSC_Customizations {
      * Frontend handler
      */
     public $frontend;
+
+    /**
+     * Payment admin handler
+     */
+    public $payment_admin;
+
+    /**
+     * Payment API handler
+     */
+    public $payment_api;
 
     /**
      * Get single instance
@@ -89,6 +101,8 @@ class CSC_Customizations {
         $this->admin = new CSC_Customizations_Admin();
         $this->api = new CSC_Customizations_API();
         $this->frontend = new CSC_Customizations_Frontend();
+        $this->payment_admin = new CSC_Payment_Method_Admin();
+        $this->payment_api = new CSC_Payment_Method_API();
     }
 
     /**
