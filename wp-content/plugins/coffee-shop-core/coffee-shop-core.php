@@ -58,6 +58,9 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-reward.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-promotion.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-special-section.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-midtrans-db.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-items-db.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-submissions-db.php';
 
         // Taxonomies
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/taxonomies/class-menu-category.php';
@@ -76,10 +79,11 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-promotions-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-special-section-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-dashboard-controller.php';
-        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-users-controller.php';
+require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-users-controller.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-midtrans-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-media-controller.php';
 
-// Admin
+        // Admin
          if (is_admin()) {
              require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/class-admin.php';
          }
@@ -160,6 +164,7 @@ public function init_rest_api() {
             'Coffee_Shop_Dashboard_Controller',
             'Coffee_Shop_Users_Controller',
             'Coffee_Shop_Media_Controller',
+            'Coffee_Shop_Midtrans_Controller',
         );
 
         foreach ($controllers as $controller) {
@@ -175,6 +180,18 @@ public function init_rest_api() {
         // Ensure roles are created on activation
         Coffee_Shop_User_Roles::register_custom_roles();
         Coffee_Shop_User_Roles::add_role_capabilities();
+
+        // Create Midtrans transaction table
+        $midtrans_db = new Coffee_Shop_Midtrans_DB();
+        $midtrans_db->create_table();
+
+        // Create order items table
+        $order_items_db = new Coffee_Shop_Order_Items_DB();
+        $order_items_db->create_table();
+
+        // Create order submissions table
+        $order_submissions_db = new Coffee_Shop_Order_Submissions_DB();
+        $order_submissions_db->create_table();
 
         // Flush rewrite rules
         flush_rewrite_rules();

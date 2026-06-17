@@ -149,8 +149,9 @@ class Coffee_Shop_Admin {
                 echo esc_html(get_post_meta($post_id, 'customer_name', true));
                 break;
             case 'items':
-                $items = get_post_meta($post_id, 'order_items', true);
-                echo is_array($items) ? count($items) : 0;
+                $order_items_db = new Coffee_Shop_Order_Items_DB();
+                $items = $order_items_db->get_by_post_id($post_id);
+                echo count($items);
                 break;
             case 'total':
                 echo 'Rp ' . number_format((float) get_post_meta($post_id, 'total', true), 0, ',', '.');
@@ -316,9 +317,9 @@ class Coffee_Shop_Admin {
         add_action('admin_notices', array($this, 'check_user_roles'));
     }
 
-    /**
-     * Render order meta box
-     */
+/**
+      * Render order meta box
+      */
     public function render_order_meta_box($post) {
         wp_nonce_field('coffee_shop_order_meta', 'coffee_shop_order_meta_nonce');
 
@@ -327,7 +328,18 @@ class Coffee_Shop_Admin {
         $customer_phone = get_post_meta($post->ID, 'customer_phone', true);
         $pickup_location = get_post_meta($post->ID, 'pickup_location_name', true);
         $pickup_time = get_post_meta($post->ID, 'pickup_time', true);
-        $order_items = get_post_meta($post->ID, 'order_items', true);
+        $order_items_db = new Coffee_Shop_Order_Items_DB();
+        $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+        $submission = $submissions_db->get_by_post_id($post->ID);
+
+        $order_items = $submission
+            ? $order_items_db->get_by_submission_id($submission['id'])
+            : $order_items_db->get_by_post_id($post->ID);
+
+        foreach ($order_items as &$item) {
+            $item['custom_options'] = maybe_unserialize($item['custom_options']);
+        }
+        unset($item);
         $subtotal = get_post_meta($post->ID, 'subtotal', true);
         $tax = get_post_meta($post->ID, 'tax', true);
         $discount = get_post_meta($post->ID, 'discount', true);
@@ -487,13 +499,44 @@ class Coffee_Shop_Admin {
         $fields = array(
             'customer_name', 'customer_email', 'customer_phone',
             'pickup_location_id', 'pickup_location_name', 'pickup_time',
-            'order_items', 'subtotal', 'tax', 'discount', 'total',
+            'subtotal', 'tax', 'discount', 'total',
             'payment_method', 'payment_status', 'notes'
         );
 
         foreach ($fields as $field) {
             if (isset($_POST[$field])) {
                 update_post_meta($post_id, $field, $_POST[$field]);
+            }
+        }
+
+        // Handle order_items - sync with dedicated table via submission
+        if (isset($_POST['order_items']) && is_array($_POST['order_items'])) {
+            $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+            $submission = $submissions_db->get_by_post_id($post_id);
+
+            $order_items_db = new Coffee_Shop_Order_Items_DB();
+
+            if ($submission) {
+                $order_items_db->delete_by_submission_id($submission['id']);
+                $order_id_for_items = $submission['order_id'];
+            } else {
+                $order_id_for_items = sprintf('Order #%d', $post_id);
+            }
+
+            foreach ($_POST['order_items'] as $item) {
+                if (!empty($item['name'])) {
+                    $order_items_db->insert(array(
+                        'submission_id'  => $submission ? $submission['id'] : 0,
+                        'order_id'       => $order_id_for_items,
+                        'menu_item_id'   => $item['menu_item_id'] ?? 0,
+                        'name'           => $item['name'],
+                        'quantity'       => $item['quantity'] ?? 1,
+                        'unit_price'     => $item['unit_price'] ?? 0,
+                        'subtotal'       => $item['subtotal'] ?? 0,
+                        'custom_options' => $item['custom_options'] ?? array(),
+                        'notes'          => $item['notes'] ?? '',
+                    ));
+                }
             }
         }
     }

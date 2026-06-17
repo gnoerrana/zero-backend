@@ -251,9 +251,12 @@ class Coffee_Shop_Order {
             'post_title' => sprintf('Order #%d', $order_id),
         ));
 
-        // Save meta fields
+        // Save meta fields (excluding order_items - stored in dedicated table)
+        $excluded_fields = array('order_items');
         foreach ($data as $key => $value) {
-            update_post_meta($order_id, $key, $value);
+            if (!in_array($key, $excluded_fields)) {
+                update_post_meta($order_id, $key, $value);
+            }
         }
 
         return $order_id;

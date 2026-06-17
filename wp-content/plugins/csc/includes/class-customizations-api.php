@@ -35,12 +35,11 @@ class CSC_Customizations_API {
     /**
      * Register REST API routes
      */
-    public function register_routes() {
+public function register_routes() {
         register_rest_route($this->namespace, '/customizations', array(
             array(
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => array($this, 'get_customizations'),
-                'permission_callback' => array($this, 'get_permissions_check'),
             ),
             array(
                 'methods' => WP_REST_Server::CREATABLE,
@@ -54,7 +53,6 @@ class CSC_Customizations_API {
             array(
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => array($this, 'get_customization'),
-                'permission_callback' => array($this, 'get_permissions_check'),
                 'args' => array(
                     'id' => array(
                         'required' => true,
@@ -95,11 +93,25 @@ class CSC_Customizations_API {
             ),
         ));
 
+        register_rest_route($this->namespace, '/custom-options/(?P<id>\d+)', array(
+            array(
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => array($this, 'get_customization'),
+                'args' => array(
+                    'id' => array(
+                        'required' => true,
+                        'validate_callback' => function($param) {
+                            return is_numeric($param);
+                        },
+                    ),
+                ),
+            ),
+        ));
+
         register_rest_route($this->namespace, '/categories', array(
             array(
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => array($this, 'get_categories'),
-                'permission_callback' => array($this, 'get_permissions_check'),
             ),
         ));
 
@@ -107,7 +119,6 @@ class CSC_Customizations_API {
             array(
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => array($this, 'get_product_custom_options'),
-                // 'permission_callback' => array($this, 'get_permissions_check'),
                 'args' => array(
                     'product_id' => array(
                         'required' => true,
@@ -131,6 +142,27 @@ class CSC_Customizations_API {
                     'custom_options' => array(
                         'required' => true,
                         'type' => 'object',
+                    ),
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/products/(?P<product_id>\d+)/custom-options/(?P<custom_option_id>\d+)', array(
+            array(
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => array($this, 'get_product_custom_option'),
+                'args' => array(
+                    'product_id' => array(
+                        'required' => true,
+                        'validate_callback' => function($param) {
+                            return is_numeric($param) && get_post_type($param) === 'menu_item';
+                        },
+                    ),
+                    'custom_option_id' => array(
+                        'required' => true,
+                        'validate_callback' => function($param) {
+                            return is_numeric($param);
+                        },
                     ),
                 ),
             ),
@@ -270,9 +302,9 @@ class CSC_Customizations_API {
         return new WP_REST_Response($applicable, 200);
     }
 
-    /**
-     * Update custom options for a product
-     */
+/**
+      * Update custom options for a product
+      */
     public function update_product_custom_options($request) {
         $product_id = $request->get_param('product_id');
         $custom_options = $request->get_param('custom_options');
@@ -299,14 +331,50 @@ class CSC_Customizations_API {
     }
 
     /**
+     * Get single custom option for a product
+     */
+    public function get_product_custom_option($request) {
+        $product_id = $request->get_param('product_id');
+        $custom_option_id = $request->get_param('custom_option_id');
+
+        $customization = $this->db->get_customization($custom_option_id);
+
+        if (!$customization) {
+            return new WP_Error('not_found', __('Custom option not found', 'coffee-shop-customizations'), array('status' => 404));
+        }
+
+        $selected_options = get_post_meta($product_id, '_csc_option_' . $customization['id'], true);
+        $custom_price = get_post_meta($product_id, '_csc_price_' . $customization['id'], true);
+
+        if (!is_array($selected_options)) {
+            $selected_options = $selected_options ? array($selected_options) : array();
+        }
+
+        $response = array(
+            'id' => (int) $customization['id'],
+            'option_name' => $customization['option_name'],
+            'options' => maybe_unserialize($customization['options']),
+            'selection_type' => $customization['selection_type'] ?: 'multi',
+            'required' => (bool) $customization['required'],
+            'selected_options' => $selected_options,
+            'custom_price' => $custom_price,
+        );
+
+        return new WP_REST_Response($response, 200);
+    }
+
+    /**
      * Format customization for response
      */
     private function format_customization($customization) {
         return array(
             'id' => (int) $customization['id'],
-            'custom_name' => $customization['custom_name'],
-            'price' => (float) $customization['price'],
+            'option_name' => $customization['option_name'],
+            'title' => $customization['option_name'],
+            'options' => maybe_unserialize($customization['options']),
             'categories' => maybe_unserialize($customization['categories']),
+            'required' => (bool) $customization['required'],
+            'selection_type' => $customization['selection_type'] ?: 'multi',
             'created_at' => $customization['created_at'],
             'updated_at' => $customization['updated_at'],
         );

@@ -145,7 +145,7 @@ class CSC_Payment_Method_Admin {
                             <?php
                             $saved_methods = $settings['payment_methods_data'] ?? array();
                             $available_methods = array(
-                                'credit_card' => 'Credit/Debit Card',
+                                'credit_card' => 'Online Payment',
                                 'bank_transfer' => 'Bank Transfer',
                                 'qris' => 'QRIS',
                                 'cash_in_shop' => 'Cash in Shop',
