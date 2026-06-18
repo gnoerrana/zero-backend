@@ -316,6 +316,13 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
             return $result;
         }
 
+        // Update status in order_submissions table as well
+        $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+        $submission = $submissions_db->get_by_post_id($order_id);
+        if ($submission) {
+            $submissions_db->update($submission['id'], array('status' => $status));
+        }
+
         // If order is completed, finalize points
         if ($status === 'completed') {
             $customer_id = get_post_meta($order_id, 'customer_id', true);
