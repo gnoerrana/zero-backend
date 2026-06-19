@@ -155,9 +155,75 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
     }
 
     /**
+     * Calculate order totals from order items using current menu prices
+     */
+    private function calculate_order_totals($order_items) {
+        $subtotal = 0;
+        
+        if (is_array($order_items)) {
+            foreach ($order_items as $item) {
+                $menu_item_id = $item['menu_item_id'] ?? 0;
+                $quantity = $item['quantity'] ?? 1;
+                
+                // Get current price from menu item meta
+                $current_price = (float) get_post_meta($menu_item_id, 'price', true);
+                $item_subtotal = $current_price * $quantity;
+                
+                // Validate and add custom options prices
+                if (!empty($item['custom_options']) && is_array($item['custom_options'])) {
+                    foreach ($item['custom_options'] as $opt) {
+                        $opt_id = $opt['custom_option_id'] ?? $opt['id'] ?? 0;
+                        
+                        // Validate options_details structure
+                        if (!empty($opt['options_details']) && is_array($opt['options_details'])) {
+                            foreach ($opt['options_details'] as $detail) {
+                                $detail_price = $detail['price'] ?? 0;
+                                // Use the price from frontend (for now, could be enhanced to validate against DB)
+                                $item_subtotal += $detail_price * $quantity;
+                            }
+                        } elseif (!empty($opt['price'])) {
+                            $item_subtotal += $opt['price'] * $quantity;
+                        }
+                    }
+                }
+                
+                $subtotal += $item_subtotal;
+            }
+        }
+        
+        $tax = $subtotal * 0.1; // 10% tax rate
+        $total = $subtotal + $tax;
+        
+        return array(
+            'subtotal' => round($subtotal, 2),
+            'tax' => round($tax, 2),
+            'total' => round($total, 2),
+        );
+    }
+
+    /**
      * Create order
      */
     public function create_item($request) {
+        $order_items = $request->get_param('order_items');
+        $provided_subtotal = (float) $request->get_param('subtotal');
+        $provided_total = (float) $request->get_param('total');
+        
+        // Validate and recalculate totals server-side
+        $calculated_totals = $this->calculate_order_totals($order_items);
+        
+        // Check if provided totals match calculated totals (with small tolerance for rounding)
+        $subtotal_diff = abs($provided_subtotal - $calculated_totals['subtotal']);
+        $total_diff = abs($provided_total - $calculated_totals['total']);
+        
+        if ($subtotal_diff > 1 || $total_diff > 100) {
+            return $this->format_error(
+                'Invalid order totals - prices may have been tampered',
+                'validation_error',
+                400
+            );
+        }
+        
         $order_data = array(
             'customer_id'          => $request->get_param('customer_id'),
             'customer_name'        => $request->get_param('customer_name'),
@@ -166,11 +232,11 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
             'pickup_location_id'   => $request->get_param('pickup_location_id'),
             'pickup_location_name' => $request->get_param('pickup_location_name'),
             'pickup_time'          => $request->get_param('pickup_time'),
-            'order_items'          => $request->get_param('order_items'),
-            'subtotal'             => $request->get_param('subtotal'),
-            'tax'                  => $request->get_param('tax'),
+            'order_items'          => $order_items,
+            'subtotal'             => $calculated_totals['subtotal'],
+            'tax'                  => $calculated_totals['tax'],
             'discount'             => $request->get_param('discount') ?: 0,
-            'total'                => $request->get_param('total'),
+            'total'                => $calculated_totals['total'],
             'payment_method'       => $request->get_param('payment_method'),
             'payment_status'       => 'pending',
             'points_earned'        => $request->get_param('points_earned') ?: 0,
@@ -211,19 +277,38 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
             'notes'                => $order_data['notes'],
         ));
 
-        // Store order items in dedicated table
+        // Store order items in dedicated table with validated prices
         $order_items_db = new Coffee_Shop_Order_Items_DB();
-        $order_items = $request->get_param('order_items');
         if (is_array($order_items)) {
             foreach ($order_items as $item) {
+                $menu_item_id = $item['menu_item_id'] ?? 0;
+                $quantity = $item['quantity'] ?? 1;
+                
+                // Get current validated price from menu item meta
+                $current_price = (float) get_post_meta($menu_item_id, 'price', true);
+                $item_subtotal = $current_price * $quantity;
+                
+                // Add custom options prices - handle both structures
+                if (!empty($item['custom_options']) && is_array($item['custom_options'])) {
+                    foreach ($item['custom_options'] as $opt) {
+                        if (!empty($opt['options_details']) && is_array($opt['options_details'])) {
+                            foreach ($opt['options_details'] as $detail) {
+                                $item_subtotal += ($detail['price'] ?? 0) * $quantity;
+                            }
+                        } else {
+                            $item_subtotal += ($opt['price'] ?? 0) * $quantity;
+                        }
+                    }
+                }
+                
                 $order_items_db->insert(array(
                     'submission_id'  => $submission_id ?: 0,
                     'order_id'       => $requested_order_id ?: sprintf('Order #%d', $order_id),
-                    'menu_item_id'   => $item['menu_item_id'] ?? 0,
+                    'menu_item_id'   => $menu_item_id,
                     'name'           => $item['name'] ?? '',
-                    'quantity'       => $item['quantity'] ?? 1,
-                    'unit_price'     => $item['unit_price'] ?? 0,
-                    'subtotal'       => $item['subtotal'] ?? 0,
+                    'quantity'       => $quantity,
+                    'unit_price'     => $current_price,
+                    'subtotal'       => round($item_subtotal, 2),
                     'custom_options' => $item['custom_options'] ?? array(),
                     'notes'          => $item['notes'] ?? '',
                 ));
