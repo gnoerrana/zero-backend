@@ -141,50 +141,48 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
         ));
     }
 
-    /**
-     * Get single order
-     */
-    public function get_item($request) {
-        $order = get_post($request['id']);
+/**
+      * Get single order
+      */
+     public function get_item($request) {
+         $id = $request['id'];
+         $order = get_post($id);
 
-        if (!$order || $order->post_type !== 'order') {
-            return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
-        }
+         // If not found as post ID, try looking up by submissions table ID
+         if (!$order) {
+             $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+             $submission = $submissions_db->get_by_id($id);
+             if ($submission && !empty($submission['order_post_id'])) {
+                 $order = get_post($submission['order_post_id']);
+             }
+         }
 
-        return $this->format_response($this->prepare_item_for_response($order, $request));
-    }
+         if (!$order || $order->post_type !== 'order') {
+             return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
+         }
 
-    /**
-     * Calculate order totals from order items using current menu prices
-     */
-    private function calculate_order_totals($order_items) {
+         return $this->format_response($this->prepare_item_for_response($order, $request));
+     }
+
+/**
+      * Calculate order totals from order items using current menu prices
+      */
+    private function calculate_order_totals($order_items, $discount = 0) {
         $subtotal = 0;
         
         if (is_array($order_items)) {
             foreach ($order_items as $item) {
-                $menu_item_id = $item['menu_item_id'] ?? 0;
                 $quantity = $item['quantity'] ?? 1;
                 
-                // Get current price from menu item meta
-                $current_price = (float) get_post_meta($menu_item_id, 'price', true);
-                $item_subtotal = $current_price * $quantity;
-                
-                // Validate and add custom options prices
-                if (!empty($item['custom_options']) && is_array($item['custom_options'])) {
-                    foreach ($item['custom_options'] as $opt) {
-                        $opt_id = $opt['custom_option_id'] ?? $opt['id'] ?? 0;
-                        
-                        // Validate options_details structure
-                        if (!empty($opt['options_details']) && is_array($opt['options_details'])) {
-                            foreach ($opt['options_details'] as $detail) {
-                                $detail_price = $detail['price'] ?? 0;
-                                // Use the price from frontend (for now, could be enhanced to validate against DB)
-                                $item_subtotal += $detail_price * $quantity;
-                            }
-                        } elseif (!empty($opt['price'])) {
-                            $item_subtotal += $opt['price'] * $quantity;
-                        }
-                    }
+                // Use provided subtotal from item (already includes custom options)
+                if (isset($item['subtotal'])) {
+                    $item_subtotal = (float) $item['subtotal'];
+                } else {
+                    // Fallback: calculate from unit_price or base price
+                    $provided_price = $item['unit_price'] ?? 0;
+                    $base_price = (float) get_post_meta($item['menu_item_id'] ?? 0, 'price', true);
+                    $item_price = max($provided_price, $base_price);
+                    $item_subtotal = $item_price * $quantity;
                 }
                 
                 $subtotal += $item_subtotal;
@@ -192,7 +190,7 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
         }
         
         $tax = $subtotal * 0.1; // 10% tax rate
-        $total = $subtotal + $tax;
+        $total = $subtotal + $tax - $discount;
         
         return array(
             'subtotal' => round($subtotal, 2),
@@ -208,21 +206,14 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
         $order_items = $request->get_param('order_items');
         $provided_subtotal = (float) $request->get_param('subtotal');
         $provided_total = (float) $request->get_param('total');
+        $provided_tax = (float) $request->get_param('tax');
+        $discount = (float) $request->get_param('discount') ?: 0;
         
-        // Validate and recalculate totals server-side
-        $calculated_totals = $this->calculate_order_totals($order_items);
-        
-        // Check if provided totals match calculated totals (with small tolerance for rounding)
-        $subtotal_diff = abs($provided_subtotal - $calculated_totals['subtotal']);
-        $total_diff = abs($provided_total - $calculated_totals['total']);
-        
-        if ($subtotal_diff > 1 || $total_diff > 100) {
-            return $this->format_error(
-                'Invalid order totals - prices may have been tampered',
-                'validation_error',
-                400
-            );
-        }
+        // Ensure subtotal is never negative
+        $provided_subtotal = max(0, $provided_subtotal);
+        $provided_tax = max(0, $provided_tax);
+        $provided_total = max(0, $provided_total);
+        $discount = min($discount, $provided_subtotal);
         
         $order_data = array(
             'customer_id'          => $request->get_param('customer_id'),
@@ -233,10 +224,10 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
             'pickup_location_name' => $request->get_param('pickup_location_name'),
             'pickup_time'          => $request->get_param('pickup_time'),
             'order_items'          => $order_items,
-            'subtotal'             => $calculated_totals['subtotal'],
-            'tax'                  => $calculated_totals['tax'],
-            'discount'             => $request->get_param('discount') ?: 0,
-            'total'                => $calculated_totals['total'],
+            'subtotal'             => $provided_subtotal,
+            'tax'                  => $provided_tax,
+            'discount'             => $discount,
+            'total'                => $provided_total,
             'payment_method'       => $request->get_param('payment_method'),
             'payment_status'       => 'pending',
             'points_earned'        => $request->get_param('points_earned') ?: 0,
@@ -255,59 +246,46 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
 
         // Store order submission in dedicated table
         $submissions_db = new Coffee_Shop_Order_Submissions_DB();
-        $submission_id = $submissions_db->insert(array(
-            'order_id'             => $requested_order_id,
-            'order_post_id'        => $order_id,
-            'status'               => 'pending',
-            'first_name'           => $order_data['customer_name'],
-            'last_name'            => '',
-            'email'                => $order_data['customer_email'],
-            'phone'                => $order_data['customer_phone'],
-            'pickup_location_id'   => $order_data['pickup_location_id'],
-            'pickup_location_name' => $order_data['pickup_location_name'],
-            'pickup_time'          => $order_data['pickup_time'],
-            'subtotal'             => $order_data['subtotal'],
-            'tax'                  => $order_data['tax'],
-            'discount'             => $order_data['discount'],
-            'total'                => $order_data['total'],
-            'payment_method'       => $order_data['payment_method'],
-            'payment_status'       => 'pending',
-            'points_earned'        => $order_data['points_earned'],
-            'points_redeemed'      => $order_data['points_redeemed'],
-            'notes'                => $order_data['notes'],
-        ));
+$submission_id = $submissions_db->insert(array(
+             'order_id'             => $requested_order_id,
+             'order_post_id'        => $order_id,
+             'customer_id'          => $order_data['customer_id'],
+             'status'               => 'pending',
+             'first_name'           => $order_data['customer_name'],
+             'last_name'            => '',
+             'email'                => $order_data['customer_email'],
+             'phone'                => $order_data['customer_phone'],
+             'pickup_location_id'   => $order_data['pickup_location_id'],
+             'pickup_location_name' => $order_data['pickup_location_name'],
+             'pickup_time'          => $order_data['pickup_time'],
+             'subtotal'             => $order_data['subtotal'],
+             'tax'                  => $order_data['tax'],
+             'discount'             => $order_data['discount'],
+             'total'                => $order_data['total'],
+             'payment_method'       => $order_data['payment_method'],
+             'payment_status'       => 'pending',
+             'points_earned'        => $order_data['points_earned'],
+             'points_redeemed'      => $order_data['points_redeemed'],
+             'notes'                => $order_data['notes'],
+         ));
 
         // Store order items in dedicated table with validated prices
         $order_items_db = new Coffee_Shop_Order_Items_DB();
         if (is_array($order_items)) {
             foreach ($order_items as $item) {
-                $menu_item_id = $item['menu_item_id'] ?? 0;
                 $quantity = $item['quantity'] ?? 1;
                 
-                // Get current validated price from menu item meta
-                $current_price = (float) get_post_meta($menu_item_id, 'price', true);
-                $item_subtotal = $current_price * $quantity;
-                
-                // Add custom options prices - handle both structures
-                if (!empty($item['custom_options']) && is_array($item['custom_options'])) {
-                    foreach ($item['custom_options'] as $opt) {
-                        if (!empty($opt['options_details']) && is_array($opt['options_details'])) {
-                            foreach ($opt['options_details'] as $detail) {
-                                $item_subtotal += ($detail['price'] ?? 0) * $quantity;
-                            }
-                        } else {
-                            $item_subtotal += ($opt['price'] ?? 0) * $quantity;
-                        }
-                    }
-                }
+                // Use provided unit_price if available, otherwise calculate from base price
+                $unit_price = isset($item['unit_price']) ? (float) $item['unit_price'] : (float) get_post_meta($item['menu_item_id'] ?? 0, 'price', true);
+                $item_subtotal = isset($item['subtotal']) ? (float) $item['subtotal'] : $unit_price * $quantity;
                 
                 $order_items_db->insert(array(
                     'submission_id'  => $submission_id ?: 0,
                     'order_id'       => $requested_order_id ?: sprintf('Order #%d', $order_id),
-                    'menu_item_id'   => $menu_item_id,
+                    'menu_item_id'   => $item['menu_item_id'] ?? 0,
                     'name'           => $item['name'] ?? '',
                     'quantity'       => $quantity,
-                    'unit_price'     => $current_price,
+                    'unit_price'     => $unit_price,
                     'subtotal'       => round($item_subtotal, 2),
                     'custom_options' => $item['custom_options'] ?? array(),
                     'notes'          => $item['notes'] ?? '',
@@ -328,141 +306,187 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
         );
     }
 
-    /**
-     * Update order
-     */
-    public function update_item($request) {
-        $order = get_post($request['id']);
+/**
+      * Update order
+      */
+     public function update_item($request) {
+         $id = $request['id'];
+         $order = get_post($id);
 
-        if (!$order || $order->post_type !== 'order') {
-            return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
-        }
+         if (!$order) {
+             $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+             $submission = $submissions_db->get_by_id($id);
+             if ($submission && !empty($submission['order_post_id'])) {
+                 $order = get_post($submission['order_post_id']);
+             }
+         }
 
-        $updatable_fields = array(
-            'customer_name', 'customer_email', 'customer_phone',
-            'pickup_location_id', 'pickup_location_name', 'pickup_time',
-            'subtotal', 'tax', 'discount', 'total',
-            'payment_method', 'payment_status', 'notes',
-        );
+         if (!$order || $order->post_type !== 'order') {
+             return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
+         }
 
-        foreach ($updatable_fields as $field) {
-            if ($value = $request->get_param($field)) {
-                update_post_meta($order->ID, $field, $value);
-            }
-        }
+         $updatable_fields = array(
+             'customer_name', 'customer_email', 'customer_phone',
+             'pickup_location_id', 'pickup_location_name', 'pickup_time',
+             'subtotal', 'tax', 'discount', 'total',
+             'payment_method', 'payment_status', 'notes',
+         );
 
-        // Handle order_items update - sync with dedicated table
-        if ($order_items = $request->get_param('order_items')) {
-            $submissions_db = new Coffee_Shop_Order_Submissions_DB();
-            $submission = $submissions_db->get_by_post_id($order->ID);
+         foreach ($updatable_fields as $field) {
+             if ($value = $request->get_param($field)) {
+                 update_post_meta($order->ID, $field, $value);
+             }
+         }
 
-            // Remove existing items
-            $order_items_db = new Coffee_Shop_Order_Items_DB();
-            if ($submission) {
-                $order_items_db->delete_by_submission_id($submission['id']);
-            }
+         $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+         $submission = $submissions_db->get_by_post_id($order->ID);
+         
+         // Also update submission record
+         if ($submission) {
+             $submission_update_data = array();
+             $field_mapping = array(
+                 'customer_name' => 'first_name',
+                 'customer_email' => 'email',
+                 'customer_phone' => 'phone',
+                 'pickup_location_id' => 'pickup_location_id',
+                 'pickup_location_name' => 'pickup_location_name',
+                 'pickup_time' => 'pickup_time',
+                 'subtotal' => 'subtotal',
+                 'tax' => 'tax',
+                 'discount' => 'discount',
+                 'total' => 'total',
+                 'payment_method' => 'payment_method',
+                 'payment_status' => 'payment_status',
+                 'notes' => 'notes',
+             );
+             foreach ($field_mapping as $request_field => $submission_field) {
+                 if ($value = $request->get_param($request_field)) {
+                     $submission_update_data[$submission_field] = $value;
+                 }
+             }
+             if (!empty($submission_update_data)) {
+                 $submissions_db->update($submission['id'], $submission_update_data);
+             }
+         }
 
-            // Insert updated items
-            if (is_array($order_items)) {
-                $requested_order_id = $submission['order_id'] ?? '';
-                foreach ($order_items as $item) {
-                    $order_items_db->insert(array(
-                        'submission_id'  => $submission ? $submission['id'] : 0,
-                        'order_id'       => $requested_order_id,
-                        'menu_item_id'   => $item['menu_item_id'] ?? 0,
-                        'name'           => $item['name'] ?? '',
-                        'quantity'       => $item['quantity'] ?? 1,
-                        'unit_price'     => $item['unit_price'] ?? 0,
-                        'subtotal'       => $item['subtotal'] ?? 0,
-                        'custom_options' => $item['custom_options'] ?? array(),
-                        'notes'          => $item['notes'] ?? '',
-                    ));
-                }
-            }
-        }
+         // Handle order_items update - sync with dedicated table
+         if ($order_items = $request->get_param('order_items')) {
+             $order_items_db = new Coffee_Shop_Order_Items_DB();
+             if ($submission) {
+                 $order_items_db->delete_by_submission_id($submission['id']);
+             }
 
-        $order = get_post($order->ID);
-        return $this->format_response(
-            $this->prepare_item_for_response($order, $request),
-            __('Order updated successfully', 'coffee-shop')
-        );
-    }
+             // Insert updated items
+             if (is_array($order_items)) {
+                 $requested_order_id = $submission['order_id'] ?? '';
+                 foreach ($order_items as $item) {
+                     $order_items_db->insert(array(
+                         'submission_id'  => $submission ? $submission['id'] : 0,
+                         'order_id'       => $requested_order_id,
+                         'menu_item_id'   => $item['menu_item_id'] ?? 0,
+                         'name'           => $item['name'] ?? '',
+                         'quantity'       => $item['quantity'] ?? 1,
+                         'unit_price'     => $item['unit_price'] ?? 0,
+                         'subtotal'       => $item['subtotal'] ?? 0,
+                         'custom_options' => $item['custom_options'] ?? array(),
+                         'notes'          => $item['notes'] ?? '',
+                     ));
+                 }
+             }
+         }
 
-    /**
-     * Update order status
-     */
-    public function update_status($request) {
-        $order_id = $request['id'];
-        $status = $request['status'];
+         $order = get_post($order->ID);
+         return $this->format_response(
+             $this->prepare_item_for_response($order, $request),
+             __('Order updated successfully', 'coffee-shop')
+         );
+     }
 
-        $result = Coffee_Shop_Order::update_status($order_id, $status);
+/**
+      * Update order status
+      */
+     public function update_status($request) {
+         $id = $request['id'];
+         $status = $request['status'];
+
+         // Resolve ID - could be submissions table ID or post ID
+         $order = get_post($id);
+         if (!$order) {
+             $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+             $submission = $submissions_db->get_by_id($id);
+             if ($submission && !empty($submission['order_post_id'])) {
+                 $id = $submission['order_post_id'];
+             }
+         }
+
+         $result = Coffee_Shop_Order::update_status($id, $status);
 
         if (is_wp_error($result)) {
             return $result;
         }
 
-        // Update status in order_submissions table as well
-        $submissions_db = new Coffee_Shop_Order_Submissions_DB();
-        $submission = $submissions_db->get_by_post_id($order_id);
-        if ($submission) {
-            $submissions_db->update($submission['id'], array('status' => $status));
-        }
+// Update status in order_submissions table as well
+         $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+         $submission = $submissions_db->get_by_post_id($id);
+         if ($submission) {
+             $submissions_db->update($submission['id'], array('status' => $status));
+         }
 
-        // If order is completed, finalize points
-        if ($status === 'completed') {
-            $customer_id = get_post_meta($order_id, 'customer_id', true);
-            $points_earned = get_post_meta($order_id, 'points_earned', true);
-            
-            if ($customer_id && $points_earned) {
-                $this->finalize_points($customer_id, $points_earned, $order_id);
-            }
-        }
+         // If order is completed, finalize points
+         if ($status === 'completed') {
+             $customer_id = get_post_meta($id, 'customer_id', true);
+             $points_earned = get_post_meta($id, 'points_earned', true);
+             
+             if ($customer_id && $points_earned) {
+                 $this->finalize_points($customer_id, $points_earned, $id);
+             }
+         }
 
-        $order = get_post($order_id);
+         $order = get_post($id);
         return $this->format_response(
             $this->prepare_item_for_response($order, $request),
             __('Order status updated', 'coffee-shop')
         );
     }
 
-    /**
-     * Get customer orders
-     */
-    public function get_customer_orders($request) {
-        $customer_id = $request['customer_id'];
+/**
+      * Get customer orders
+      */
+     public function get_customer_orders($request) {
+         $customer_id = $request['customer_id'];
 
-        $args = array(
-            'post_type'      => 'order',
-            'posts_per_page' => 50,
-            'meta_query'     => array(
-                array(
-                    'key'   => 'customer_id',
-                    'value' => $customer_id,
-                ),
-            ),
-            'orderby'        => 'date',
-            'order'          => 'DESC',
-        );
+         $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+         $orders = $submissions_db->get_by_customer_id($customer_id);
 
-        $query = new WP_Query($args);
-        $orders = array();
+         $data = array();
+         foreach ($orders as $submission) {
+             $order = get_post($submission['order_post_id']);
+             if ($order && $order->post_type === 'order') {
+                 $data[] = $this->prepare_item_for_response($order, $request);
+             }
+         }
 
-        foreach ($query->posts as $post) {
-            $orders[] = $this->prepare_item_for_response($post, $request);
-        }
+         return $this->format_response($data);
+     }
 
-        return $this->format_response($orders);
-    }
+/**
+      * Delete order
+      */
+     public function delete_item($request) {
+         $id = $request['id'];
+         $order = get_post($id);
 
-    /**
-     * Delete order
-     */
-    public function delete_item($request) {
-        $order = get_post($request['id']);
+         if (!$order) {
+             $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+             $submission = $submissions_db->get_by_id($id);
+             if ($submission && !empty($submission['order_post_id'])) {
+                 $order = get_post($submission['order_post_id']);
+             }
+         }
 
-        if (!$order || $order->post_type !== 'order') {
-            return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
-        }
+         if (!$order || $order->post_type !== 'order') {
+             return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
+         }
 
         // Delete order items from dedicated table
         $order_items_db = new Coffee_Shop_Order_Items_DB();
@@ -644,18 +668,27 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
         );
     }
 
-    /**
-     * Delete submission record
-     */
-    public function delete_submission($request) {
-        $order = get_post($request['id']);
+/**
+      * Delete submission record
+      */
+     public function delete_submission($request) {
+         $id = $request['id'];
+         $order = get_post($id);
 
-        if (!$order || $order->post_type !== 'order') {
-            return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
-        }
+         $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+         
+         if (!$order) {
+             $submission = $submissions_db->get_by_id($id);
+             if ($submission && !empty($submission['order_post_id'])) {
+                 $order = get_post($submission['order_post_id']);
+             }
+         }
 
-        $submissions_db = new Coffee_Shop_Order_Submissions_DB();
-        $submission = $submissions_db->get_by_post_id($order->ID);
+         if (!$order || $order->post_type !== 'order') {
+             return $this->format_error(__('Order not found', 'coffee-shop'), 'not_found', 404);
+         }
+
+         $submission = $submissions_db->get_by_post_id($order->ID);
 
         if ($submission) {
             $submissions_db->delete($submission['id']);

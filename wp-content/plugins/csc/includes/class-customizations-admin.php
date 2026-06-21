@@ -35,6 +35,8 @@ class CSC_Customizations_Admin {
      * Add admin menu
      */
     public function add_admin_menu() {
+        $this->upgrade_schema();
+        
         // Custom Options under Menu
         add_submenu_page(
             'edit.php?post_type=menu_item',
@@ -169,6 +171,17 @@ class CSC_Customizations_Admin {
                                     </select>
                                 </div>
 
+                                <div class="csc-field-group">
+                                    <label>Selection Type Frontend</label>
+                                    <select class="csc-selection-type-frontend">
+                                        <?php 
+                                        $stf = isset($customization['selection_type_frontend']) ? $customization['selection_type_frontend'] : 'multi_select';
+                                        ?>
+                                        <option value="single" <?php selected($stf, 'single'); ?>>Single Select</option>
+                                        <option value="multi_select" <?php selected($stf, 'multi_select'); ?>>Multi Select</option>
+                                    </select>
+                                </div>
+
                                 <button type="button" class="button csc-remove-item">Remove</button>
                             </div>
                         <?php endforeach; ?>
@@ -182,8 +195,24 @@ class CSC_Customizations_Admin {
                     <span id="csc-save-status"></span>
                 </div>
             </div>
-        </div>
+</div>
         <?php
+    }
+
+    public function upgrade_schema() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'csc_custom_options';
+
+        // Always check if column exists (for existing tables)
+        $column_exists = $wpdb->get_var("SHOW COLUMNS FROM {$table_name} LIKE 'selection_type_frontend'");
+
+        if (!$column_exists) {
+            $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN selection_type_frontend varchar(20) DEFAULT 'multi_select' AFTER selection_type");
+        }
+
+        // Update any NULL values
+        $wpdb->query("UPDATE {$table_name} SET selection_type_frontend = 'multi_select' WHERE selection_type_frontend IS NULL OR selection_type_frontend = ''");
+        update_option('csc_db_version', CSC_VERSION);
     }
 
     /**
@@ -200,6 +229,12 @@ class CSC_Customizations_Admin {
 
         $customizations = isset($_POST['customizations']) ? $_POST['customizations'] : array();
 
+        // Debug logging
+        error_log('CSC Received customizations: ' . print_r($customizations, true));
+
+        // Ensure column exists
+        $this->upgrade_schema();
+
         $sanitized_data = array();
         foreach ($customizations as $customization) {
             if (empty($customization['option_name'])) {
@@ -212,6 +247,7 @@ class CSC_Customizations_Admin {
                 'categories' => $customization['categories'],
                 'required' => isset($customization['required']) ? (bool) $customization['required'] : false,
                 'selection_type' => isset($customization['selection_type']) ? sanitize_text_field($customization['selection_type']) : 'multi',
+                'selection_type_frontend' => isset($customization['selection_type_frontend']) ? sanitize_text_field($customization['selection_type_frontend']) : 'multi_select',
             );
         }
 
@@ -238,13 +274,21 @@ class CSC_Customizations_Admin {
                 'categories' => maybe_serialize($customization['categories']),
                 'required' => $customization['required'],
                 'selection_type' => $customization['selection_type'],
+                'selection_type_frontend' => isset($customization['selection_type_frontend']) ? $customization['selection_type_frontend'] : 'multi_select',
             );
 
             if ($customization['id']) {
-                $wpdb->update($table_name, $data, array('id' => $customization['id']), array('%s', '%s', '%s', '%d', '%s'), array('%d'));
+                $result = $wpdb->update($table_name, $data, array('id' => $customization['id']), array('%s', '%s', '%s', '%d', '%s', '%s'), array('%d'));
+                if ($result === false) {
+                    error_log('CSC Update failed for ID ' . $customization['id'] . ': ' . $wpdb->last_error . ' Data: ' . print_r($data, true));
+                    wp_die('Database update failed');
+                }
                 $updated_ids[] = $customization['id'];
             } else {
-                $result = $wpdb->insert($table_name, $data, array('%s', '%s', '%s', '%d', '%s'));
+                $result = $wpdb->insert($table_name, $data, array('%s', '%s', '%s', '%d', '%s', '%s'));
+                if ($result === false) {
+                    error_log('CSC Insert failed: ' . $wpdb->last_error);
+                }
                 $updated_ids[] = $wpdb->insert_id;
             }
         }

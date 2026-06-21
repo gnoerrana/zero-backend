@@ -242,35 +242,34 @@ class Coffee_Shop_Dashboard_Controller extends Coffee_Shop_REST_Controller {
         return $this->format_response($popular_items);
     }
 
-    /**
-     * Get recent orders
-     */
+/**
+      * Get recent orders
+      */
     public function get_recent_orders($request) {
+        global $wpdb;
+
         $limit = $request->get_param('limit') ?: 10;
+        $table_name = $wpdb->prefix . 'coffee_orders_submission';
 
-        $args = array(
-            'post_type'      => 'order',
-            'posts_per_page' => $limit,
-            'orderby'        => 'date',
-            'order'          => 'DESC',
-        );
+        $orders = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table_name} ORDER BY created_at DESC LIMIT %d",
+            $limit
+        ), ARRAY_A);
 
-        $query = new WP_Query($args);
-        $orders = array();
+$data = array();
+         foreach ($orders as $order) {
+             $data[] = array(
+                 'id'            => (int) $order['order_post_id'],
+                 'order_number'  => $order['order_id'],
+                 'status'        => $order['status'],
+                 'customer_name' => trim($order['first_name'] . ' ' . $order['last_name']),
+                 'total'         => (float) $order['total'],
+                 'pickup_location'=> $order['pickup_location_name'],
+                 'created_at'    => $order['created_at'],
+             );
+         }
 
-        foreach ($query->posts as $post) {
-            $orders[] = array(
-                'id'            => $post->ID,
-                'order_number'  => $post->post_title,
-                'status'        => $post->post_status,
-                'customer_name' => get_post_meta($post->ID, 'customer_name', true),
-                'total'         => (float) get_post_meta($post->ID, 'total', true),
-                'pickup_location'=> get_post_meta($post->ID, 'pickup_location_name', true),
-                'created_at'    => $post->post_date,
-            );
-        }
-
-        return $this->format_response($orders);
+        return $this->format_response($data);
     }
 
     /**

@@ -33,6 +33,7 @@ class Coffee_Shop_Order_Submissions_DB {
             id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             order_id varchar(100) NOT NULL,
             order_post_id bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+            customer_id bigint(20) UNSIGNED DEFAULT 0,
             status varchar(50) NOT NULL DEFAULT 'pending',
             first_name varchar(100) NOT NULL,
             last_name varchar(100) NOT NULL,
@@ -55,6 +56,7 @@ class Coffee_Shop_Order_Submissions_DB {
             PRIMARY KEY (id),
             KEY order_id (order_id),
             KEY order_post_id (order_post_id),
+            KEY customer_id (customer_id),
             KEY status (status),
             KEY created_at (created_at)
         ) $charset_collate;";
@@ -63,7 +65,7 @@ class Coffee_Shop_Order_Submissions_DB {
         dbDelta($sql);
     }
 
-    /**
+/**
      * Insert order submission
      */
     public function insert($data) {
@@ -74,6 +76,7 @@ class Coffee_Shop_Order_Submissions_DB {
             array(
                 'order_id'              => sanitize_text_field($data['order_id'] ?? ''),
                 'order_post_id'         => (int) ($data['order_post_id'] ?? 0),
+                'customer_id'           => (int) ($data['customer_id'] ?? 0),
                 'status'                => sanitize_text_field($data['status'] ?? 'pending'),
                 'first_name'            => sanitize_text_field($data['first_name'] ?? ''),
                 'last_name'             => sanitize_text_field($data['last_name'] ?? ''),
@@ -92,7 +95,7 @@ class Coffee_Shop_Order_Submissions_DB {
                 'points_redeemed'       => (int) ($data['points_redeemed'] ?? 0),
                 'notes'                 => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : '',
             ),
-            array('%s', '%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%d', '%d', '%s')
+            array('%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%f', '%f', '%f', '%f', '%s', '%s', '%d', '%d', '%s')
         );
 
         return $result ? $wpdb->insert_id : false;
@@ -138,6 +141,21 @@ class Coffee_Shop_Order_Submissions_DB {
             $wpdb->prepare(
                 "SELECT * FROM {$this->table_name} WHERE order_post_id = %d",
                 $post_id
+            ),
+            ARRAY_A
+        );
+    }
+
+/**
+     * Get order submissions by customer ID
+     */
+    public function get_by_customer_id($customer_id) {
+        global $wpdb;
+
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM {$this->table_name} WHERE customer_id = %d ORDER BY created_at DESC",
+                $customer_id
             ),
             ARRAY_A
         );
@@ -200,6 +218,15 @@ class Coffee_Shop_Order_Submissions_DB {
             'last_name' => '%s',
             'email' => '%s',
             'phone' => '%s',
+            'customer_id' => '%d',
+            'pickup_location_id' => '%d',
+            'pickup_location_name' => '%s',
+            'pickup_time' => '%s',
+            'subtotal' => '%f',
+            'tax' => '%f',
+            'discount' => '%f',
+            'total' => '%f',
+            'payment_method' => '%s',
         );
 
         foreach ($allowed_fields as $field => $format_str) {

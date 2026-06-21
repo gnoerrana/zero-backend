@@ -247,11 +247,23 @@ public function init_rest_api() {
             // Check if this is an API request (REST API or custom endpoints)
             if (strpos($request_uri, '/wp-json/') !== false || strpos($request_uri, '/wp-admin/admin-ajax.php') !== false) {
                 $allowed_origins = ['http://localhost:3000', 'http://base.zerohour.local', 'http://localhost:8080'];
-                if (in_array($origin, $allowed_origins) || empty($origin)) {
-                    header('Access-Control-Allow-Origin: ' . ($origin ?: '*'));
+                
+                // Also allow any localhost or .local origin
+                $allow_origin = false;
+                if (empty($origin)) {
+                    $allow_origin = '*';
+                } elseif (in_array($origin, $allowed_origins)) {
+                    $allow_origin = $origin;
+                } elseif (preg_match('/^https?:\/\/([\w\-]+(\.[\w\-]+)*\.local|localhost)(:\d+)?$/', $origin)) {
+                    $allow_origin = $origin;
+                }
+                
+                if ($allow_origin) {
+                    header('Access-Control-Allow-Origin: ' . $allow_origin);
                     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
                     header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With, X-WP-Nonce');
                     header('Access-Control-Allow-Credentials: true');
+                    header('Vary: Origin');
                 }
             }
         }, 0); // Priority 0 to run first
@@ -265,11 +277,22 @@ public function init_rest_api() {
                 // Check if this is an API request
                 if (strpos($request_uri, '/wp-json/') !== false || strpos($request_uri, '/wp-admin/admin-ajax.php') !== false) {
                     $allowed_origins = ['http://localhost:3000', 'http://base.zerohour.local', 'http://localhost:8080'];
-                    if (in_array($origin, $allowed_origins) || empty($origin)) {
-                        header('Access-Control-Allow-Origin: ' . ($origin ?: '*'));
+                    
+                    $allow_origin = false;
+                    if (empty($origin)) {
+                        $allow_origin = '*';
+                    } elseif (in_array($origin, $allowed_origins)) {
+                        $allow_origin = $origin;
+                    } elseif (preg_match('/^https?:\/\/([\w\-]+(\.[\w\-]+)*\.local|localhost)(:\d+)?$/', $origin)) {
+                        $allow_origin = $origin;
+                    }
+                    
+                    if ($allow_origin) {
+                        header('Access-Control-Allow-Origin: ' . $allow_origin);
                         header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
                         header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With, X-WP-Nonce');
                         header('Access-Control-Allow-Credentials: true');
+                        header('Vary: Origin');
                     }
                 }
 

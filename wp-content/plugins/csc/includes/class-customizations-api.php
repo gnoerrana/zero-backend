@@ -281,20 +281,34 @@ public function register_routes() {
             $customization_categories = maybe_unserialize($customization['categories']);
             if (array_intersect($categories, $customization_categories)) {
                 $selected_options = get_post_meta($product_id, '_csc_option_' . $customization['id'], true);
-                $custom_price = get_post_meta($product_id, '_csc_price_' . $customization['id'], true);
+                $saved_prices = get_post_meta($product_id, '_csc_prices_' . $customization['id'], true);
+                $original_options = maybe_unserialize($customization['options']);
 
                 if (!is_array($selected_options)) {
                     $selected_options = array($selected_options);
                 }
 
+                // Merge saved prices with original options
+                if (!is_array($saved_prices)) {
+                    $saved_prices = array();
+                }
+                $options = array();
+                foreach ($original_options as $opt) {
+                    $custom_price = isset($saved_prices[$opt['label']]) ? $saved_prices[$opt['label']] : null;
+                    $options[] = array(
+                        'label' => $opt['label'],
+                        'price' => $custom_price !== null ? $custom_price : $opt['price'],
+                    );
+                }
+
                 $applicable[] = array(
                     'id' => $customization['id'],
                     'option_name' => $customization['option_name'],
-                    'options' => maybe_unserialize($customization['options']),
+                    'options' => $options,
                     'selection_type' => $customization['selection_type'],
+                    'selection_type_frontend' => $customization['selection_type_frontend'] ?: 'multi_select',
                     'required' => (bool) $customization['required'],
                     'selected_options' => $selected_options,
-                    'custom_price' => $custom_price,
                 );
             }
         }
@@ -316,14 +330,20 @@ public function register_routes() {
 
         foreach ($custom_options as $option) {
             $option_key = '_csc_option_' . $option['id'];
-            $price_key = '_csc_price_' . $option['id'];
 
             if (isset($option['selected_options'])) {
                 update_post_meta($product_id, $option_key, $option['selected_options']);
             }
 
-            if (isset($option['custom_price'])) {
-                update_post_meta($product_id, $price_key, floatval($option['custom_price']));
+            // Store individual option prices
+            if (isset($option['options']) && is_array($option['options'])) {
+                $prices = array();
+                foreach ($option['options'] as $opt) {
+                    if (isset($opt['label']) && isset($opt['price'])) {
+                        $prices[$opt['label']] = floatval($opt['price']);
+                    }
+                }
+                update_post_meta($product_id, '_csc_prices_' . $option['id'], $prices);
             }
         }
 
@@ -344,20 +364,35 @@ public function register_routes() {
         }
 
         $selected_options = get_post_meta($product_id, '_csc_option_' . $customization['id'], true);
-        $custom_price = get_post_meta($product_id, '_csc_price_' . $customization['id'], true);
+        $saved_prices = get_post_meta($product_id, '_csc_prices_' . $customization['id'], true);
+        $original_options = maybe_unserialize($customization['options']);
 
         if (!is_array($selected_options)) {
             $selected_options = $selected_options ? array($selected_options) : array();
         }
 
+        if (!is_array($saved_prices)) {
+            $saved_prices = array();
+        }
+
+        // Merge saved prices with original options
+        $options = array();
+        foreach ($original_options as $opt) {
+            $custom_price = isset($saved_prices[$opt['label']]) ? $saved_prices[$opt['label']] : null;
+            $options[] = array(
+                'label' => $opt['label'],
+                'price' => $custom_price !== null ? $custom_price : $opt['price'],
+            );
+        }
+
         $response = array(
             'id' => (int) $customization['id'],
             'option_name' => $customization['option_name'],
-            'options' => maybe_unserialize($customization['options']),
+            'options' => $options,
             'selection_type' => $customization['selection_type'] ?: 'multi',
+            'selection_type_frontend' => $customization['selection_type_frontend'] ?: 'multi_select',
             'required' => (bool) $customization['required'],
             'selected_options' => $selected_options,
-            'custom_price' => $custom_price,
         );
 
         return new WP_REST_Response($response, 200);
@@ -375,6 +410,7 @@ public function register_routes() {
             'categories' => maybe_unserialize($customization['categories']),
             'required' => (bool) $customization['required'],
             'selection_type' => $customization['selection_type'] ?: 'multi',
+            'selection_type_frontend' => $customization['selection_type_frontend'] ?: 'multi_select',
             'created_at' => $customization['created_at'],
             'updated_at' => $customization['updated_at'],
         );
@@ -390,6 +426,7 @@ public function register_routes() {
             'categories' => $request->get_param('categories'),
             'required' => $request->get_param('required'),
             'selection_type' => $request->get_param('selection_type'),
+            'selection_type_frontend' => $request->get_param('selection_type_frontend'),
         );
     }
 
@@ -445,6 +482,12 @@ public function register_routes() {
                 'type' => 'string',
                 'enum' => array('single', 'multi'),
                 'default' => 'multi',
+            ),
+            'selection_type_frontend' => array(
+                'required' => false,
+                'type' => 'string',
+                'enum' => array('single', 'multi_select'),
+                'default' => 'multi_select',
             ),
         );
     }

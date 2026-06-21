@@ -107,6 +107,13 @@ jQuery(document).ready(function($) {
                         '<option value="multi"' + (customization.selection_type !== 'single' ? ' selected' : '') + '>Multi Select</option>' +
                     '</select>' +
                 '</div>' +
+                '<div class="csc-field-group">' +
+                    '<label>Selection Type Frontend</label>' +
+                    '<select class="csc-selection-type-frontend">' +
+                        '<option value="single"' + ((customization.selection_type_frontend || 'multi_select') === 'single' ? ' selected' : '') + '>Single Select</option>' +
+                        '<option value="multi_select"' + ((customization.selection_type_frontend || 'multi_select') !== 'single' ? ' selected' : '') + '>Multi Select</option>' +
+                    '</select>' +
+                '</div>' +
                 '<button type="button" class="button csc-remove-item">Remove</button>' +
             '</div>';
         },
@@ -140,6 +147,12 @@ jQuery(document).ready(function($) {
                 var categories = $item.find('.csc-categories').val() || [];
                 var required = $item.find('.csc-required').is(':checked');
                 var selectionType = $item.find('.csc-selection-type').val() || 'multi';
+                var selectionTypeFrontend = $item.find('.csc-selection-type-frontend').length ? $item.find('.csc-selection-type-frontend').val() : 'multi_select';
+                if (selectionTypeFrontend === null || selectionTypeFrontend === undefined) {
+                    selectionTypeFrontend = 'multi_select';
+                }
+
+                console.log('Item ID:', id, 'Selection Type Frontend:', selectionTypeFrontend);
 
                 if (optionName && options.length > 0) {
                     customizations.push({
@@ -148,7 +161,8 @@ jQuery(document).ready(function($) {
                         options: options,
                         categories: categories.map(function(cat) { return parseInt(cat); }),
                         required: required,
-                        selection_type: selectionType
+                        selection_type: selectionType,
+                        selection_type_frontend: selectionTypeFrontend
                     });
                 }
             });

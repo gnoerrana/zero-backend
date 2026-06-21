@@ -25,6 +25,7 @@ class CSC_Customizations_DB {
      */
     public function create_table() {
         global $wpdb;
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
         $charset_collate = $wpdb->get_charset_collate();
 
@@ -35,12 +36,12 @@ class CSC_Customizations_DB {
             categories longtext NOT NULL,
             required tinyint(1) DEFAULT 0,
             selection_type varchar(20) DEFAULT 'multi',
+            selection_type_frontend varchar(20) DEFAULT 'multi_select',
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
         ) $charset_collate;";
 
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
     }
 
@@ -77,8 +78,9 @@ class CSC_Customizations_DB {
                 'categories' => maybe_serialize($data['categories']),
                 'required' => isset($data['required']) ? (bool) $data['required'] : false,
                 'selection_type' => isset($data['selection_type']) ? sanitize_text_field($data['selection_type']) : 'multi',
+                'selection_type_frontend' => isset($data['selection_type_frontend']) ? sanitize_text_field($data['selection_type_frontend']) : 'multi_select',
             ),
-            array('%s', '%s', '%s', '%d', '%s')
+            array('%s', '%s', '%s', '%d', '%s', '%s')
         );
 
         return $result ? $wpdb->insert_id : false;
@@ -98,9 +100,10 @@ class CSC_Customizations_DB {
                 'categories' => maybe_serialize($data['categories']),
                 'required' => isset($data['required']) ? (bool) $data['required'] : false,
                 'selection_type' => isset($data['selection_type']) ? sanitize_text_field($data['selection_type']) : 'multi',
+                'selection_type_frontend' => isset($data['selection_type_frontend']) ? sanitize_text_field($data['selection_type_frontend']) : 'multi_select',
             ),
             array('id' => $id),
-            array('%s', '%s', '%s', '%d', '%s'),
+            array('%s', '%s', '%s', '%d', '%s', '%s'),
             array('%d')
         );
     }
@@ -116,6 +119,7 @@ class CSC_Customizations_DB {
             'categories' => maybe_unserialize($customization['categories']),
             'required' => (bool) $customization['required'],
             'selection_type' => $customization['selection_type'] ?: 'multi',
+            'selection_type_frontend' => $customization['selection_type_frontend'] ?: 'multi_select',
             'created_at' => $customization['created_at'],
             'updated_at' => $customization['updated_at'],
         );
