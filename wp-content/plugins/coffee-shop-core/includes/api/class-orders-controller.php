@@ -298,6 +298,11 @@ $submission_id = $submissions_db->insert(array(
             $this->award_points($order_data['customer_id'], $order_data['points_earned'], $order_id);
         }
 
+        // Send order confirmation email to customer
+        if ($order_data['customer_email']) {
+            Coffee_Shop_Order_Emails::send_order_confirmation($order_id, $submission_id);
+        }
+
         $order = get_post($order_id);
         return $this->format_response(
             $this->prepare_item_for_response($order, $request),

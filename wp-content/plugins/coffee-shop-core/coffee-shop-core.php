@@ -47,9 +47,9 @@ final class Coffee_Shop_Core {
         $this->init_hooks();
     }
 
-    /**
-     * Load dependencies
-     */
+/**
+      * Load dependencies
+      */
     private function load_dependencies() {
         // Post Types
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/post-types/class-menu-item.php';
@@ -61,6 +61,7 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-midtrans-db.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-items-db.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-submissions-db.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-emails.php';
 
         // Taxonomies
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/taxonomies/class-menu-category.php';
@@ -79,12 +80,12 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-promotions-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-special-section-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-dashboard-controller.php';
-require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-users-controller.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-users-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-midtrans-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-media-controller.php';
 
         // Admin
-         if (is_admin()) {
+        if (is_admin()) {
              require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/class-admin.php';
          }
     }

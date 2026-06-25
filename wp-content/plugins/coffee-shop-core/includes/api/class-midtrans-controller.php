@@ -82,6 +82,11 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
             $payment_status = $this->map_transaction_status($transaction_data['transaction_status']);
             update_post_meta($order_post_id, 'payment_status', $payment_status);
             update_post_meta($order_post_id, 'midtrans_transaction_id', $transaction_data['transaction_id']);
+
+            // Send payment confirmation email for successful payments
+            if ($payment_status === 'paid' && in_array($transaction_data['transaction_status'], ['capture', 'settlement'])) {
+                Coffee_Shop_Order_Emails::send_payment_confirmation($order_post_id);
+            }
         }
 
         return $this->format_response(
