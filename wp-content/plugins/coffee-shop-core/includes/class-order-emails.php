@@ -23,6 +23,11 @@ class Coffee_Shop_Order_Emails {
             return false;
         }
 
+        $allowed_statuses = array('processing');
+        if (!in_array($submission['status'], $allowed_statuses, true)) {
+            return false;
+        }
+
         $customer_email = $submission['email'];
         $customer_name = $submission['first_name'];
 

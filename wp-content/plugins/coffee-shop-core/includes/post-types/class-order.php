@@ -10,11 +10,13 @@ class Coffee_Shop_Order {
     const POST_TYPE = 'order';
 
     // Order status constants
-    const STATUS_PENDING    = 'pending';
-    const STATUS_PREPARING  = 'preparing';
-    const STATUS_READY      = 'ready';
-    const STATUS_COMPLETED  = 'completed';
-    const STATUS_CANCELLED  = 'cancelled';
+    const STATUS_PENDING        = 'pending';
+    const STATUS_PENDING_PAYMENT = 'pending_payment';
+    const STATUS_PROCESSING     = 'processing';
+    const STATUS_PREPARING      = 'preparing';
+    const STATUS_READY          = 'ready';
+    const STATUS_COMPLETED      = 'completed';
+    const STATUS_CANCELLED      = 'cancelled';
 
     /**
      * Register post type
@@ -67,11 +69,13 @@ class Coffee_Shop_Order {
      */
     private static function register_statuses() {
         $statuses = array(
-            self::STATUS_PENDING   => __('Pending', 'coffee-shop'),
-            self::STATUS_PREPARING => __('Preparing', 'coffee-shop'),
-            self::STATUS_READY     => __('Ready for Pickup', 'coffee-shop'),
-            self::STATUS_COMPLETED => __('Completed', 'coffee-shop'),
-            self::STATUS_CANCELLED => __('Cancelled', 'coffee-shop'),
+            self::STATUS_PENDING         => __('Pending', 'coffee-shop'),
+            self::STATUS_PENDING_PAYMENT => __('Pending Payment', 'coffee-shop'),
+            self::STATUS_PROCESSING      => __('Processing', 'coffee-shop'),
+            self::STATUS_PREPARING       => __('Preparing', 'coffee-shop'),
+            self::STATUS_READY           => __('Ready for Pickup', 'coffee-shop'),
+            self::STATUS_COMPLETED       => __('Completed', 'coffee-shop'),
+            self::STATUS_CANCELLED       => __('Cancelled', 'coffee-shop'),
         );
 
         foreach ($statuses as $status => $label) {
@@ -220,11 +224,13 @@ class Coffee_Shop_Order {
      */
     public static function get_statuses() {
         return array(
-            self::STATUS_PENDING   => __('Pending', 'coffee-shop'),
-            self::STATUS_PREPARING => __('Preparing', 'coffee-shop'),
-            self::STATUS_READY     => __('Ready for Pickup', 'coffee-shop'),
-            self::STATUS_COMPLETED => __('Completed', 'coffee-shop'),
-            self::STATUS_CANCELLED => __('Cancelled', 'coffee-shop'),
+            self::STATUS_PENDING         => __('Pending', 'coffee-shop'),
+            self::STATUS_PENDING_PAYMENT => __('Pending Payment', 'coffee-shop'),
+            self::STATUS_PROCESSING      => __('Processing', 'coffee-shop'),
+            self::STATUS_PREPARING       => __('Preparing', 'coffee-shop'),
+            self::STATUS_READY           => __('Ready for Pickup', 'coffee-shop'),
+            self::STATUS_COMPLETED       => __('Completed', 'coffee-shop'),
+            self::STATUS_CANCELLED       => __('Cancelled', 'coffee-shop'),
         );
     }
 

@@ -43,15 +43,15 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
         ));
     }
 
-    /**
-     * Store transaction status from Midtrans
-     */
+/**
+      * Store transaction status from Midtrans
+      */
     public function store_transaction($request) {
         $transaction_data = array(
             'order_id'           => $request->get_param('order_id'),
             'status_code'        => $request->get_param('status_code'),
             'status_message'     => $request->get_param('status_message'),
-            'transaction_id'     => $request->get_param('transaction_id'),
+            'transaction_id'   => $request->get_param('transaction_id'),
             'gross_amount'       => $request->get_param('gross_amount'),
             'payment_type'       => $request->get_param('payment_type'),
             'transaction_time'   => $request->get_param('transaction_time'),
@@ -59,9 +59,14 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
             'raw_response'       => $request->get_json_params(),
         );
 
-        // Validate required fields
-        if (empty($transaction_data['order_id']) || empty($transaction_data['transaction_id'])) {
-            return $this->format_error(__('Missing required parameters', 'coffee-shop'), 'missing_params', 400);
+        // Validate required fields - transaction_id can be optional for pending/error states
+        if (empty($transaction_data['order_id'])) {
+            return $this->format_error(__('Missing required parameter: order_id', 'coffee-shop'), 'missing_params', 400);
+        }
+
+        // Generate transaction_id if not provided (for pending/error states)
+        if (empty($transaction_data['transaction_id'])) {
+            $transaction_data['transaction_id'] = $transaction_data['order_id'] . '-' . time();
         }
 
         // Use provided order_post_id or try to find it
@@ -82,6 +87,33 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
             $payment_status = $this->map_transaction_status($transaction_data['transaction_status']);
             update_post_meta($order_post_id, 'payment_status', $payment_status);
             update_post_meta($order_post_id, 'midtrans_transaction_id', $transaction_data['transaction_id']);
+
+            // Map transaction status to order status
+            $order_status = $this->map_transaction_to_order_status($transaction_data['transaction_status']);
+
+            // Get previous submission status before update
+            $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+            $submission = $submissions_db->get_by_post_id($order_post_id);
+            $previous_status = $submission ? $submission['status'] : '';
+
+            if ($order_status) {
+                wp_update_post(array(
+                    'ID' => $order_post_id,
+                    'post_status' => $order_status,
+                ));
+            }
+
+            // Also update status in order_submissions table
+            if ($submission) {
+                // Map to submission status (pending_payment instead of pending for pending state)
+                $submission_status = ($order_status === 'pending_payment') ? 'pending_payment' : $order_status;
+                $submissions_db->update($submission['id'], array('status' => $submission_status));
+            }
+
+            // Send order confirmation email when status changes to processing (payment settled)
+            if ($order_status === 'processing' && $previous_status !== 'processing' && $submission) {
+                Coffee_Shop_Order_Emails::send_order_confirmation($order_post_id, $submission['id']);
+            }
 
             // Send payment confirmation email for successful payments
             if ($payment_status === 'paid' && in_array($transaction_data['transaction_status'], ['capture', 'settlement'])) {
@@ -143,11 +175,29 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
             'pending'       => 'pending',
             'deny'          => 'failed',
             'cancel'        => 'cancelled',
+            'expired'       => 'expired',
             'expire'        => 'expired',
             'refund'        => 'refunded',
             'partial_refund'=> 'refunded',
         );
 
         return $map[$transaction_status] ?? 'pending';
+    }
+
+    /**
+      * Map Midtrans transaction status to order status
+      */
+    private function map_transaction_to_order_status($transaction_status) {
+        $map = array(
+            'pending' => 'pending_payment',
+            'settlement' => 'processing',
+            'capture' => 'processing',
+            'expire' => 'cancelled',
+            'expired' => 'cancelled',
+            'cancel' => 'cancelled',
+            'deny' => 'cancelled',
+        );
+
+        return $map[$transaction_status] ?? null;
     }
 }

@@ -162,11 +162,13 @@ class Coffee_Shop_Admin {
             case 'status':
                 $status = get_post_status($post_id);
                 $status_labels = array(
-                    'pending'   => '<span class="status-badge pending">Pending</span>',
-                    'preparing' => '<span class="status-badge preparing">Preparing</span>',
-                    'ready'     => '<span class="status-badge ready">Ready</span>',
-                    'completed' => '<span class="status-badge completed">Completed</span>',
-                    'cancelled' => '<span class="status-badge cancelled">Cancelled</span>',
+                    'pending'        => '<span class="status-badge pending">Pending</span>',
+                    'pending_payment' => '<span class="status-badge pending_payment">Pending Payment</span>',
+                    'processing'     => '<span class="status-badge processing">Processing</span>',
+                    'preparing'      => '<span class="status-badge preparing">Preparing</span>',
+                    'ready'          => '<span class="status-badge ready">Ready</span>',
+                    'completed'      => '<span class="status-badge completed">Completed</span>',
+                    'cancelled'      => '<span class="status-badge cancelled">Cancelled</span>',
                 );
                 echo $status_labels[$status] ?? $status;
                 break;

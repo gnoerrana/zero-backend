@@ -39,6 +39,11 @@ class Coffee_Shop_Midtrans_DB {
             payment_type varchar(50) NOT NULL,
             transaction_time datetime NOT NULL,
             transaction_status varchar(50) NOT NULL,
+            va_numbers longtext,
+            fraud_status varchar(50) DEFAULT '',
+            settlement_time datetime DEFAULT NULL,
+            expiry_time datetime DEFAULT NULL,
+            currency varchar(10) DEFAULT 'IDR',
             raw_response longtext NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -71,9 +76,14 @@ class Coffee_Shop_Midtrans_DB {
                 'payment_type'        => sanitize_text_field($data['payment_type']),
                 'transaction_time'    => sanitize_text_field($data['transaction_time']),
                 'transaction_status'  => sanitize_text_field($data['transaction_status']),
+                'va_numbers'          => isset($data['va_numbers']) ? maybe_serialize($data['va_numbers']) : '',
+                'fraud_status'        => sanitize_text_field($data['fraud_status'] ?? ''),
+                'settlement_time'     => sanitize_text_field($data['settlement_time'] ?? ''),
+                'expiry_time'         => sanitize_text_field($data['expiry_time'] ?? ''),
+                'currency'            => sanitize_text_field($data['currency'] ?? 'IDR'),
                 'raw_response'        => maybe_serialize($data['raw_response'] ?? $data),
             ),
-            array('%s', '%d', '%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s')
+            array('%s', '%d', '%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
         );
 
         return $result ? $wpdb->insert_id : false;
@@ -124,32 +134,47 @@ class Coffee_Shop_Midtrans_DB {
         );
     }
 
-    /**
-     * Find order post ID by order_id string
-     */
+/**
+      * Find order post ID by order_id string
+      */
     public function find_order_post_id($order_id) {
         global $wpdb;
 
-        // Remove 'ORD-' prefix if present to match WordPress order format
+        // First, try to find via coffee_orders_submission table (where order_id matches Midtrans order format)
+        $submission = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT order_post_id FROM {$wpdb->prefix}coffee_orders_submission WHERE order_id = %s",
+                $order_id
+            ),
+            ARRAY_A
+        );
+        if ($submission && !empty($submission['order_post_id'])) {
+            return (int) $submission['order_post_id'];
+        }
+
+        // Fallback: try to find order by order_id pattern
         $clean_order_id = str_replace('ORD-', '', $order_id);
 
-        $order = $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT ID FROM {$wpdb->posts} 
-                WHERE post_type = 'order' 
-                AND post_title LIKE %s",
-                '%' . $wpdb->esc_like($clean_order_id) . '%'
-            )
-        );
+        // Check if clean_order_id looks like a numeric post ID
+        if (is_numeric($clean_order_id)) {
+            $order = $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT ID FROM {$wpdb->posts} 
+                    WHERE post_type = 'order' 
+                    AND ID = %d",
+                    (int) $clean_order_id
+                )
+            );
+        }
 
-        // Also try exact match with 'Order #' format
+        // Also try to find by post_title LIKE
         if (!$order) {
             $order = $wpdb->get_var(
                 $wpdb->prepare(
                     "SELECT ID FROM {$wpdb->posts} 
                     WHERE post_type = 'order' 
-                    AND post_title = %s",
-                    'Order #' . $clean_order_id
+                    AND post_title LIKE %s",
+                    '%' . $wpdb->esc_like($clean_order_id) . '%'
                 )
             );
         }

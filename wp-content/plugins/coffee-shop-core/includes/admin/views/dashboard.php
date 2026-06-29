@@ -301,6 +301,8 @@ $popular_items = get_posts(array(
 }
 
 .status-badge.pending { background: #fff3e0; color: #e65100; }
+.status-badge.pending_payment { background: #e8e6ff; color: #554caf; }
+.status-badge.processing { background: #fff8e1; color: #ff8f00; }
 .status-badge.preparing { background: #e3f2fd; color: #1565c0; }
 .status-badge.ready { background: #e8f5e9; color: #2e7d32; }
 .status-badge.completed { background: #f3e5f5; color: #7b1fa2; }

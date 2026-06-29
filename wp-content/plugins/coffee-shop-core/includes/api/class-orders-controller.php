@@ -83,7 +83,7 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
                     'status' => array(
                         'required'          => true,
                         'validate_callback' => function($param) {
-                            return in_array($param, array('pending', 'preparing', 'ready', 'completed', 'cancelled'));
+                            return in_array($param, array('pending', 'pending_payment', 'processing', 'preparing', 'ready', 'completed', 'cancelled'));
                         },
                     ),
                 ),
@@ -298,11 +298,6 @@ $submission_id = $submissions_db->insert(array(
             $this->award_points($order_data['customer_id'], $order_data['points_earned'], $order_id);
         }
 
-        // Send order confirmation email to customer
-        if ($order_data['customer_email']) {
-            Coffee_Shop_Order_Emails::send_order_confirmation($order_id, $submission_id);
-        }
-
         $order = get_post($order_id);
         return $this->format_response(
             $this->prepare_item_for_response($order, $request),
@@ -414,17 +409,23 @@ $submission_id = $submissions_db->insert(array(
          $id = $request['id'];
          $status = $request['status'];
 
-         // Resolve ID - could be submissions table ID or post ID
-         $order = get_post($id);
-         if (!$order) {
-             $submissions_db = new Coffee_Shop_Order_Submissions_DB();
-             $submission = $submissions_db->get_by_id($id);
-             if ($submission && !empty($submission['order_post_id'])) {
-                 $id = $submission['order_post_id'];
-             }
-         }
+// Resolve ID - could be submissions table ID or post ID
+          $order = get_post($id);
+          if (!$order) {
+              $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+              $submission = $submissions_db->get_by_id($id);
+              if ($submission && !empty($submission['order_post_id'])) {
+                  $id = $submission['order_post_id'];
+                  $order = get_post($id);
+              }
+          }
 
-         $result = Coffee_Shop_Order::update_status($id, $status);
+          // Get previous status before update
+          $submissions_db = new Coffee_Shop_Order_Submissions_DB();
+          $submission = $submissions_db->get_by_post_id($id);
+          $previous_status = $submission ? $submission['status'] : ($order ? $order->post_status : '');
+
+          $result = Coffee_Shop_Order::update_status($id, $status);
 
         if (is_wp_error($result)) {
             return $result;
@@ -437,17 +438,24 @@ $submission_id = $submissions_db->insert(array(
              $submissions_db->update($submission['id'], array('status' => $status));
          }
 
-         // If order is completed, finalize points
-         if ($status === 'completed') {
-             $customer_id = get_post_meta($id, 'customer_id', true);
-             $points_earned = get_post_meta($id, 'points_earned', true);
-             
-             if ($customer_id && $points_earned) {
-                 $this->finalize_points($customer_id, $points_earned, $id);
-             }
-         }
+// If order is completed, finalize points
+          if ($status === 'completed') {
+              $customer_id = get_post_meta($id, 'customer_id', true);
+              $points_earned = get_post_meta($id, 'points_earned', true);
+              
+              if ($customer_id && $points_earned) {
+                  $this->finalize_points($customer_id, $points_earned, $id);
+              }
+          }
 
-         $order = get_post($id);
+// Send order confirmation email when status changes to processing (payment settled)
+          if ($status === 'processing' && $previous_status !== 'processing') {
+              if ($submission && $submission['email']) {
+                  Coffee_Shop_Order_Emails::send_order_confirmation($id, $submission['id']);
+              }
+          }
+
+          $order = get_post($id);
         return $this->format_response(
             $this->prepare_item_for_response($order, $request),
             __('Order status updated', 'coffee-shop')
@@ -664,7 +672,7 @@ $submission_id = $submissions_db->insert(array(
             'status' => array(
                 'description'       => __('Filter by order status.', 'coffee-shop'),
                 'type'              => 'string',
-                'enum'              => array('pending', 'preparing', 'ready', 'completed', 'cancelled'),
+'enum' => array('pending', 'pending_payment', 'processing', 'preparing', 'ready', 'completed', 'cancelled'),
             ),
             'date' => array(
                 'description'       => __('Filter by date.', 'coffee-shop'),
