@@ -74,7 +74,7 @@ class CSC_Payment_Method_API {
         $payment_methods_data = $settings['payment_methods_data'] ?? array();
 
         $available_methods = array(
-            'credit_card' => 'Online Payment',
+            'online_payment' => 'Online Payment',
             'bank_transfer' => 'Bank Transfer',
             'qris' => 'QRIS',
             'cash_in_shop' => 'Cash in Shop',
