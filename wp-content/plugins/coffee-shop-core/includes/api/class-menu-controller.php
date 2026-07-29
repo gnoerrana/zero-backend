@@ -147,7 +147,7 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             }
 
             // Save new meta fields
-            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern','ordering_num', 'pattern', 'image_type', 'enable_flip', 'flip_image', 'manage_stock', 'stock_quantity');
+            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern', 'color','ordering_num', 'pattern', 'image_type', 'enable_flip', 'flip_image', 'manage_stock', 'stock_quantity');
             foreach ($new_meta_fields as $field) {
                 if ($request->get_param($field) !== null) {
                     if ($field === 'stock_quantity') {
@@ -260,7 +260,7 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
             wp_update_post($post_data);
 
             // Update new meta fields
-            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern','ordering_num', 'pattern', 'image_type', 'enable_flip', 'flip_image', 'manage_stock', 'stock_quantity');
+            $new_meta_fields = array('category', 'id', 'image', 'map', 'price', 'enable_pattern','color','ordering_num', 'pattern', 'image_type', 'enable_flip', 'flip_image', 'manage_stock', 'stock_quantity');
             foreach ($new_meta_fields as $field) {
                 if ($request->get_param($field) !== null) {
                     if ($field === 'stock_quantity') {
@@ -468,6 +468,7 @@ class Coffee_Shop_Menu_Controller extends Coffee_Shop_REST_Controller {
                 'menu_categories'     => wp_list_pluck($categories, 'term_id'),
                 'customization_options' => get_post_meta($post->ID, 'customization_options', true) ?: array(),
                 'enable_pattern'      => (bool) get_post_meta($post->ID, 'enable_pattern', true),
+                'color'               => get_post_meta($post->ID, 'color', true),
                 'ordering_num'        => intval(get_post_meta($post->ID, 'ordering_num', true)),
                 'pattern'             => get_post_meta($post->ID, 'pattern', true),
                 'image_type'          => get_post_meta($post->ID, 'image_type', true),

@@ -62,6 +62,7 @@ final class Coffee_Shop_Core {
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-items-db.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-submissions-db.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-order-emails.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/class-whatsapp-notifications.php';
 
         // Taxonomies
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/taxonomies/class-menu-category.php';

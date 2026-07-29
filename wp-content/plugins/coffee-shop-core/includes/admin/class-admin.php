@@ -41,6 +41,9 @@ class Coffee_Shop_Admin {
 
         // AJAX handlers for media uploads
         add_action('wp_ajax_coffee_shop_upload_media', array($this, 'ajax_upload_media'));
+
+        // AJAX handler for WhatsApp bridge status check
+        add_action('wp_ajax_coffee_shop_whatsapp_status', array($this, 'ajax_whatsapp_status'));
     }
 
     /**
@@ -790,8 +793,43 @@ class Coffee_Shop_Admin {
     }
 
     /**
+     * AJAX handler to check the WhatsApp bridge connection status
+     */
+    public function ajax_whatsapp_status() {
+        check_ajax_referer('coffee_shop_admin', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('error' => __('Unauthorized', 'coffee-shop')));
+        }
+
+        $settings = Coffee_Shop_WhatsApp::get_settings();
+
+        if (empty($settings['bridge_url'])) {
+            wp_send_json_error(array('error' => __('Bridge URL not configured', 'coffee-shop')));
+        }
+
+        $response = wp_remote_get(trailingslashit($settings['bridge_url']) . 'status', array(
+            'timeout' => 5,
+            'headers' => array('x-api-key' => $settings['api_key']),
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('error' => $response->get_error_message()));
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code < 200 || $code >= 300) {
+            wp_send_json_error(array('error' => $body['error'] ?? sprintf(__('Bridge returned HTTP %d', 'coffee-shop'), $code)));
+        }
+
+        wp_send_json_success($body);
+    }
+
+    /**
      * Allow SVG uploads
-     * 
+     *
      * @param array $mimes
      * @return array
      */

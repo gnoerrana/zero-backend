@@ -298,6 +298,12 @@ $submission_id = $submissions_db->insert(array(
             $this->award_points($order_data['customer_id'], $order_data['points_earned'], $order_id);
         }
 
+        // Notify customer via WhatsApp that their order was received
+        Coffee_Shop_WhatsApp::send_order_created($order_id);
+
+        // Notify store admin about the new order
+        Coffee_Shop_WhatsApp::notify_admin_new_order($order_id);
+
         $order = get_post($order_id);
         return $this->format_response(
             $this->prepare_item_for_response($order, $request),
@@ -453,6 +459,16 @@ $submission_id = $submissions_db->insert(array(
               if ($submission && $submission['email']) {
                   Coffee_Shop_Order_Emails::send_order_confirmation($id, $submission['id']);
               }
+          }
+
+// Send WhatsApp notification when order starts being prepared
+          if ($status === 'preparing' && $previous_status !== 'preparing') {
+              Coffee_Shop_WhatsApp::send_order_preparing($id);
+          }
+
+// Send WhatsApp notification when order is ready for pickup
+          if ($status === 'ready' && $previous_status !== 'ready') {
+              Coffee_Shop_WhatsApp::send_order_ready($id);
           }
 
           $order = get_post($id);

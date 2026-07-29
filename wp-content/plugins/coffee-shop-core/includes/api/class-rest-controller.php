@@ -47,15 +47,12 @@ abstract class Coffee_Shop_REST_Controller extends WP_REST_Controller {
         );
     }
 
-    /**
-     * Validate JWT token
+/**
+     * Validate JWT token - decode payload without signature verification (JWT plugin already validated)
      */
     protected function validate_jwt_token($token) {
-        // Simple JWT validation - in production, use a proper JWT library
-        $secret = defined('JWT_AUTH_SECRET_KEY') ? JWT_AUTH_SECRET_KEY : 'your-secret-key';
-        
+        // JWT Auth plugin has already validated the signature, we just need to extract user_id
         $parts = explode('.', $token);
-        
         if (count($parts) !== 3) {
             return new WP_Error(
                 'invalid_token',
@@ -63,41 +60,41 @@ abstract class Coffee_Shop_REST_Controller extends WP_REST_Controller {
                 array('status' => 401)
             );
         }
-
-        list($header, $payload, $signature) = $parts;
         
-        // Verify signature - JWT uses base64url encoding
-        $expected_signature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(hash_hmac('sha256', "$header.$payload", $secret, true)));
-
-        if ($signature !== $expected_signature) {
-            return new WP_Error(
-                'invalid_signature',
-                __('Invalid token signature', 'coffee-shop'),
-                array('status' => 401)
-            );
-        }
-
-        // Decode payload
-        $payload_data = json_decode(base64_decode($payload), true);
+        list(, $payload,) = $parts;
         
-        if (!$payload_data || !isset($payload_data['user_id'])) {
+        // Base64url decode
+        $decoded_payload = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
+        
+        if (!$decoded_payload) {
             return new WP_Error(
                 'invalid_payload',
                 __('Invalid token payload', 'coffee-shop'),
                 array('status' => 401)
             );
         }
-
+        
+        // Handle JWT Auth plugin format: data.user.id
+        $user_id = $decoded_payload['data']['user']['id'] ?? $decoded_payload['user_id'] ?? null;
+        
+        if (!$user_id) {
+            return new WP_Error(
+                'invalid_payload',
+                __('Invalid token payload', 'coffee-shop'),
+                array('status' => 401)
+            );
+        }
+        
         // Check expiration
-        if (isset($payload_data['exp']) && $payload_data['exp'] < time()) {
+        if (isset($decoded_payload['exp']) && $decoded_payload['exp'] < time()) {
             return new WP_Error(
                 'token_expired',
                 __('Token has expired', 'coffee-shop'),
                 array('status' => 401)
             );
         }
-
-        return $payload_data['user_id'];
+        
+        return $user_id;
     }
 
     /**

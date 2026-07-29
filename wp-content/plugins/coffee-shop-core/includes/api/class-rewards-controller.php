@@ -56,7 +56,7 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
         ));
 
         // Get user points
-        register_rest_route($this->namespace, '/user/(?P<user_id>\d+)/points', array(
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/user/(?P<user_id>\d+)/points', array(
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array($this, 'get_user_points'),
@@ -65,7 +65,7 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
         ));
 
         // Get user transactions
-        register_rest_route($this->namespace, '/user/(?P<user_id>\d+)/transactions', array(
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/user/(?P<user_id>\d+)/transactions', array(
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array($this, 'get_user_transactions'),
@@ -78,6 +78,15 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array($this, 'get_members'),
+                'permission_callback' => array($this, 'admin_permissions_check'),
+            ),
+        ));
+
+        // Adjust user points (admin only)
+        register_rest_route($this->namespace, '/adjust-points', array(
+            array(
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array($this, 'adjust_user_points'),
                 'permission_callback' => array($this, 'admin_permissions_check'),
             ),
         ));
@@ -102,7 +111,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             ),
         );
 
-        // Filter by tier
         if ($tier = $request->get_param('tier')) {
             $args['meta_query'][] = array(
                 'relation' => 'OR',
@@ -158,7 +166,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             return $post_id;
         }
 
-        // Save meta fields
         $meta_fields = array(
             'points_required', 'category', 'reward_type', 'discount_percentage',
             'discount_amount', 'free_item_id', 'valid_from', 'valid_until',
@@ -171,7 +178,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             }
         }
 
-        // Set featured image
         if ($image_id = $request->get_param('image_id')) {
             set_post_thumbnail($post_id, $image_id);
         }
@@ -194,7 +200,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             return $this->format_error(__('Reward not found', 'coffee-shop'), 'not_found', 404);
         }
 
-        // Update post data
         $post_data = array('ID' => $post->ID);
         
         if ($name = $request->get_param('name')) {
@@ -206,7 +211,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
 
         wp_update_post($post_data);
 
-        // Update meta fields
         $meta_fields = array(
             'points_required', 'category', 'reward_type', 'discount_percentage',
             'discount_amount', 'free_item_id', 'valid_from', 'valid_until',
@@ -261,7 +265,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
         $points_required = (int) get_post_meta($reward_id, 'points_required', true);
         $current_points = (int) get_user_meta($user_id, 'reward_points', true);
 
-        // Check if user has enough points
         if ($current_points < $points_required) {
             return $this->format_error(
                 __('Insufficient points', 'coffee-shop'),
@@ -270,7 +273,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             );
         }
 
-        // Check tier requirement
         $tier_required = get_post_meta($reward_id, 'tier_required', true);
         $user_tier = get_user_meta($user_id, 'reward_tier', true) ?: 'bronze';
         
@@ -282,7 +284,6 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             );
         }
 
-        // Check max redemptions
         $max_redemptions = (int) get_post_meta($reward_id, 'max_redemptions', true);
         $current_redemptions = (int) get_post_meta($reward_id, 'current_redemptions', true);
         
@@ -294,13 +295,9 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             );
         }
 
-        // Deduct points
         update_user_meta($user_id, 'reward_points', $current_points - $points_required);
-        
-        // Update redemption count
         update_post_meta($reward_id, 'current_redemptions', $current_redemptions + 1);
 
-        // Log transaction
         global $wpdb;
         $wpdb->insert(
             $wpdb->prefix . 'coffee_points_transactions',
@@ -379,18 +376,15 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
      * Get members list
      */
     public function get_members($request) {
+        $per_page = $request->get_param('per_page') ?: 50;
+        $page = $request->get_param('page') ?: 1;
+        
         $args = array(
-            'role'       => 'customer',
-            'number'     => $request->get_param('per_page') ?: 50,
-            'offset'     => ($request->get_param('page') - 1) * $request->get_param('per_page'),
-            'orderby'    => 'registered',
-            'order'      => 'DESC',
-            'meta_query' => array(
-                array(
-                    'key'     => 'reward_points',
-                    'compare' => 'EXISTS',
-                ),
-            ),
+            'role'    => 'customer',
+            'number'  => $per_page,
+            'offset'  => ($page - 1) * $per_page,
+            'orderby' => 'registered',
+            'order'   => 'DESC',
         );
 
         $users = get_users($args);
@@ -408,6 +402,53 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
         }
 
         return $this->format_response($members);
+    }
+
+    /**
+     * Adjust user points
+     */
+    public function adjust_user_points($request) {
+        $user_id = $request->get_param('user_id');
+        $points = intval($request->get_param('points'));
+        $reason = $request->get_param('reason');
+
+        if (!$user_id || !$points) {
+            return $this->format_error(__('Invalid parameters', 'coffee-shop'), 'invalid_params', 400);
+        }
+
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            return $this->format_error(__('User not found', 'coffee-shop'), 'user_not_found', 404);
+        }
+
+        $current_points = (int) get_user_meta($user_id, 'reward_points', true) ?: 0;
+        $new_points = max(0, $current_points + $points);
+        update_user_meta($user_id, 'reward_points', $new_points);
+
+        $tier = $this->calculate_tier($new_points);
+        update_user_meta($user_id, 'reward_tier', $tier);
+
+        global $wpdb;
+        $wpdb->insert(
+            $wpdb->prefix . 'coffee_points_transactions',
+            array(
+                'user_id'          => $user_id,
+                'points'           => $points,
+                'transaction_type' => $points >= 0 ? 'earn' : 'redeem',
+                'reference_id'     => 0,
+                'reference_type'   => 'admin_adjustment',
+                'description'      => $reason ?: 'Points adjusted by admin',
+                'created_at'       => current_time('mysql'),
+            )
+        );
+
+        return $this->format_response(array(
+            'user_id'    => $user_id,
+            'old_points' => $current_points,
+            'new_points' => $new_points,
+            'adjustment' => $points,
+            'tier'       => $tier,
+        ), __('Points adjusted successfully', 'coffee-shop'));
     }
 
     /**
@@ -467,16 +508,36 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
     }
 
     /**
+     * Calculate tier based on points
+     */
+    public function calculate_tier($points) {
+        if ($points >= 10000) return 'platinum';
+        if ($points >= 5000) return 'gold';
+        if ($points >= 2000) return 'silver';
+        return 'bronze';
+    }
+
+    /**
+     * Auth permissions check - JWT Auth plugin validates tokens before request
+     */
+    public function auth_permissions_check($request) {
+        $auth_header = $request->get_header('Authorization');
+        
+        if (!$auth_header || strpos($auth_header, 'Bearer') !== 0) {
+            return new WP_Error(
+                'rest_forbidden',
+                __('Authentication required', 'coffee-shop'),
+                array('status' => 401)
+            );
+        }
+        
+        return true;
+    }
+
+    /**
      * Admin permissions check
      */
     public function admin_permissions_check($request) {
         return current_user_can('manage_options');
-    }
-
-    /**
-     * Auth permissions check
-     */
-    public function auth_permissions_check($request) {
-        return is_user_logged_in();
     }
 }
