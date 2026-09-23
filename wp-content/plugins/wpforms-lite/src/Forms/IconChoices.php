@@ -124,8 +124,8 @@ class IconChoices {
 
 		$upload_dir = wpforms_upload_dir();
 
-		$this->cache_base_url  = $upload_dir['url'] . '/icon-choices';
-		$this->cache_base_path = $upload_dir['path'] . '/icon-choices';
+		$this->cache_base_url  = isset($upload_dir['url']) ? $upload_dir['url'] . '/icon-choices' : '';
+		$this->cache_base_path = isset($upload_dir['path']) ? $upload_dir['path'] . '/icon-choices' : '';
 		$this->icons_data_file = $this->cache_base_path . '/icons.json';
 
 		$this->default_icon_sizes = [

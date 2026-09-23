@@ -17,6 +17,16 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
     }
 
     /**
+     * Mime types accepted for upload (images + the video formats used by Hall of Fame)
+     */
+    private static function get_allowed_mime_types() {
+        return array(
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+            'video/mp4', 'video/quicktime', 'video/webm',
+        );
+    }
+
+    /**
      * Check if user is authenticated
      */
     protected function check_auth($request) {
@@ -173,8 +183,8 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
             'paged'          => $request->get_param('page') ?: 1,
         );
 
-        // Add mime type filter for images including SVG
-        $args['post_mime_type'] = array('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml');
+        // Add mime type filter for images (incl. SVG) and video
+        $args['post_mime_type'] = self::get_allowed_mime_types();
 
         $query = new WP_Query($args);
         $items = array();
@@ -254,15 +264,17 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
         }
 
         // Check file type
-        $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml');
+        $allowed_types = self::get_allowed_mime_types();
         if (!in_array($file['type'], $allowed_types)) {
-            return $this->format_error(__('Invalid file type. Only images are allowed.', 'coffee-shop'), 'invalid_type', 400);
+            return $this->format_error(__('Invalid file type. Only images and videos (mp4, mov, webm) are allowed.', 'coffee-shop'), 'invalid_type', 400);
         }
 
-        // Check file size (max 10MB)
-        $max_size = 10 * 1024 * 1024; // 10MB
+        // Videos get a higher size cap than images
+        $is_video = strpos($file['type'], 'video/') === 0;
+        $max_size = $is_video ? 50 * 1024 * 1024 : 10 * 1024 * 1024; // 50MB video / 10MB image
         if ($file['size'] > $max_size) {
-            return $this->format_error(__('File too large. Maximum size is 10MB.', 'coffee-shop'), 'file_too_large', 400);
+            $limit_label = $is_video ? '50MB' : '10MB';
+            return $this->format_error(sprintf(__('File too large. Maximum size is %s.', 'coffee-shop'), $limit_label), 'file_too_large', 400);
         }
 
         // Handle upload
@@ -294,8 +306,11 @@ class Coffee_Shop_Media_Controller extends WP_REST_Controller {
             return $attachment_id;
         }
 
-        // Generate metadata
+        // Generate metadata. wp_generate_attachment_metadata() delegates to wp_read_video_metadata()
+        // / wp_read_audio_metadata() for non-image files, which live in media.php, not image.php -
+        // without it, video uploads fatal here with "Call to undefined function wp_read_video_metadata()".
         require_once(ABSPATH . 'wp-admin/includes/image.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
         $attachment_data = wp_generate_attachment_metadata($attachment_id, $uploaded_file['file']);
         wp_update_attachment_metadata($attachment_id, $attachment_data);
 

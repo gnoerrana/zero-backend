@@ -19,11 +19,14 @@ class Coffee_Shop_Admin {
         add_action('manage_menu_item_posts_custom_column', array($this, 'menu_item_column_content'), 10, 2);
         add_filter('manage_special_section_posts_columns', array($this, 'special_section_columns'));
         add_action('manage_special_section_posts_custom_column', array($this, 'special_section_column_content'), 10, 2);
+        add_filter('manage_hall_of_fame_posts_columns', array($this, 'hall_of_fame_columns'));
+        add_action('manage_hall_of_fame_posts_custom_column', array($this, 'hall_of_fame_column_content'), 10, 2);
         add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
         add_action('save_post_order', array($this, 'save_order_meta'));
         add_action('save_post_menu_item', array($this, 'save_menu_item_meta'));
         add_action('save_post_promotion', array($this, 'save_promotion_meta'));
         add_action('save_post_special_section', array($this, 'save_special_section_meta'));
+        add_action('save_post_hall_of_fame', array($this, 'save_hall_of_fame_meta'));
 
         // Ensure user roles are available
         add_action('admin_init', array($this, 'ensure_user_roles'));
@@ -85,7 +88,18 @@ class Coffee_Shop_Admin {
      * Enqueue admin scripts
      */
     public function enqueue_scripts($hook) {
-        if (strpos($hook, 'coffee-shop') !== false || strpos($hook, 'special_section') !== false) {
+        // $hook is generic ('post.php'/'post-new.php'/'edit.php') for CPT edit/list screens - it
+        // never contains the post type slug, so check the current screen's post type as well.
+        $screen = get_current_screen();
+        $is_our_post_type = $screen && in_array($screen->post_type, array('special_section', 'hall_of_fame'), true);
+
+        if (strpos($hook, 'coffee-shop') !== false || strpos($hook, 'special_section') !== false || $is_our_post_type) {
+            // hall_of_fame declares neither 'editor' nor 'thumbnail' support, so WordPress never
+            // auto-loads the wp.media JS on its own (unlike special_section, which gets it for
+            // free via its Featured Image box) - without this, wp.media() is undefined and the
+            // "Choose Image or Video" button silently does nothing.
+            wp_enqueue_media();
+
             wp_enqueue_style(
                 'coffee-shop-admin',
                 COFFEE_SHOP_PLUGIN_URL . 'assets/css/admin.css',
@@ -255,6 +269,58 @@ class Coffee_Shop_Admin {
     }
 
     /**
+     * Custom columns for Hall of Fame
+     */
+    public function hall_of_fame_columns($columns) {
+        $new_columns = array(
+            'cb'            => $columns['cb'],
+            'title'         => __('Title', 'coffee-shop'),
+            'thumbnail'     => __('Media', 'coffee-shop'),
+            'text_position' => __('Text Position', 'coffee-shop'),
+            'is_active'     => __('Active', 'coffee-shop'),
+            'order'         => __('Order', 'coffee-shop'),
+        );
+        return $new_columns;
+    }
+
+    /**
+     * Hall of Fame column content
+     */
+    public function hall_of_fame_column_content($column, $post_id) {
+        switch ($column) {
+            case 'thumbnail':
+                $media_type = get_post_meta($post_id, 'media_type', true) ?: 'image';
+                $media_url = get_post_meta($post_id, 'media_url', true);
+                if (!$media_url) {
+                    echo '—';
+                } elseif ($media_type === 'video') {
+                    echo '<video src="' . esc_url($media_url) . '" style="max-width: 60px; max-height: 60px;" muted></video>';
+                } else {
+                    echo '<img src="' . esc_url($media_url) . '" style="max-width: 60px; max-height: 60px; object-fit: cover;">';
+                }
+                break;
+            case 'text_position':
+                echo esc_html(ucfirst(get_post_meta($post_id, 'text_position', true) ?: 'bottom'));
+                break;
+            case 'is_active':
+                echo $this->get_boolean_meta_display($post_id, 'is_active');
+                break;
+            case 'order':
+                $post = get_post($post_id);
+                echo intval($post->menu_order);
+                break;
+        }
+    }
+
+    /**
+     * Small helper to render a yes/no meta value as a checkmark/cross
+     */
+    private function get_boolean_meta_display($post_id, $meta_key) {
+        $value = get_post_meta($post_id, $meta_key, true);
+        return $value ? '<span style="color: green;">✓</span>' : '<span style="color: red;">✗</span>';
+    }
+
+    /**
      * Add meta boxes
      */
     public function add_meta_boxes() {
@@ -314,6 +380,16 @@ class Coffee_Shop_Admin {
             __('Section Details', 'coffee-shop'),
             array($this, 'render_special_section_meta_box'),
             'special_section',
+            'normal',
+            'high'
+        );
+
+        // Hall of Fame details
+        add_meta_box(
+            'hall_of_fame_details',
+            __('Hall of Fame Details', 'coffee-shop'),
+            array($this, 'render_hall_of_fame_meta_box'),
+            'hall_of_fame',
             'normal',
             'high'
         );
@@ -451,6 +527,29 @@ class Coffee_Shop_Admin {
         $selected_category = !empty($category) ? $category[0]->term_id : 0;
 
         include COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/views/meta-boxes/special-section.php';
+    }
+
+    /**
+     * Render Hall of Fame meta box
+     */
+    public function render_hall_of_fame_meta_box($post) {
+        wp_nonce_field('coffee_shop_hall_of_fame_meta', 'coffee_shop_hall_of_fame_meta_nonce');
+
+        $media_type = get_post_meta($post->ID, 'media_type', true) ?: 'image';
+        $media_id = get_post_meta($post->ID, 'media_id', true);
+        $media_url = get_post_meta($post->ID, 'media_url', true);
+        $text_position = get_post_meta($post->ID, 'text_position', true) ?: 'bottom';
+        $title_en = get_post_meta($post->ID, 'title_en', true);
+        $title_id = get_post_meta($post->ID, 'title_id', true);
+        $description_en = get_post_meta($post->ID, 'description_en', true);
+        $description_id = get_post_meta($post->ID, 'description_id', true);
+        $is_active = get_post_meta($post->ID, 'is_active', true);
+        // New items default to active rather than silently hidden.
+        if ($is_active === '') {
+            $is_active = 1;
+        }
+
+        include COFFEE_SHOP_PLUGIN_DIR . 'includes/admin/views/meta-boxes/hall-of-fame.php';
     }
 
     /**
@@ -675,6 +774,62 @@ class Coffee_Shop_Admin {
                 wp_set_object_terms($post_id, $category_id, 'special_section_category');
             }
         }
+    }
+
+    /**
+     * Save Hall of Fame meta
+     */
+    public function save_hall_of_fame_meta($post_id) {
+        if (!isset($_POST['coffee_shop_hall_of_fame_meta_nonce']) ||
+            !wp_verify_nonce($_POST['coffee_shop_hall_of_fame_meta_nonce'], 'coffee_shop_hall_of_fame_meta')) {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        $media_type = isset($_POST['hof_media_type']) ? sanitize_text_field($_POST['hof_media_type']) : 'image';
+        if (!in_array($media_type, Coffee_Shop_Hall_Of_Fame::get_media_types(), true)) {
+            $media_type = 'image';
+        }
+        update_post_meta($post_id, 'media_type', $media_type);
+
+        if (isset($_POST['hof_media_id'])) {
+            update_post_meta($post_id, 'media_id', intval($_POST['hof_media_id']));
+        }
+
+        if (isset($_POST['hof_media_url'])) {
+            update_post_meta($post_id, 'media_url', esc_url_raw($_POST['hof_media_url']));
+        }
+
+        $text_position = isset($_POST['hof_text_position']) ? sanitize_text_field($_POST['hof_text_position']) : 'bottom';
+        if (!in_array($text_position, Coffee_Shop_Hall_Of_Fame::get_text_positions(), true)) {
+            $text_position = 'bottom';
+        }
+        update_post_meta($post_id, 'text_position', $text_position);
+
+        if (isset($_POST['hof_title_en'])) {
+            update_post_meta($post_id, 'title_en', sanitize_text_field($_POST['hof_title_en']));
+        }
+
+        if (isset($_POST['hof_title_id'])) {
+            update_post_meta($post_id, 'title_id', sanitize_text_field($_POST['hof_title_id']));
+        }
+
+        if (isset($_POST['hof_description_en'])) {
+            update_post_meta($post_id, 'description_en', sanitize_textarea_field($_POST['hof_description_en']));
+        }
+
+        if (isset($_POST['hof_description_id'])) {
+            update_post_meta($post_id, 'description_id', sanitize_textarea_field($_POST['hof_description_id']));
+        }
+
+        update_post_meta($post_id, 'is_active', isset($_POST['hof_is_active']) ? 1 : 0);
     }
 
     /**
