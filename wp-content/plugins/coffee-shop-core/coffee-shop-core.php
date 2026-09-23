@@ -76,6 +76,7 @@ final class Coffee_Shop_Core {
         // API
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-rest-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-orders-controller.php';
+        require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-store-settings-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-menu-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-locations-controller.php';
         require_once COFFEE_SHOP_PLUGIN_DIR . 'includes/api/class-rewards-controller.php';
@@ -161,6 +162,7 @@ final class Coffee_Shop_Core {
 public function init_rest_api() {
         $controllers = array(
             'Coffee_Shop_Orders_Controller',
+            'Coffee_Shop_Store_Settings_Controller',
             'Coffee_Shop_Menu_Controller',
             'Coffee_Shop_Locations_Controller',
             'Coffee_Shop_Rewards_Controller',

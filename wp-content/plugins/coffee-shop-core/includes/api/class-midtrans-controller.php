@@ -84,6 +84,13 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
 
         // Update order payment status if order exists
         if ($order_post_id > 0) {
+            // Captured before overwriting below, so the email guard can tell whether this
+            // request is the one that actually transitioned payment_status to 'paid'
+            // (the frontend can call this endpoint more than once for the same transaction -
+            // e.g. a re-run of a React effect - and without this check every duplicate call
+            // would resend the payment confirmation email).
+            $previous_payment_status = get_post_meta($order_post_id, 'payment_status', true);
+
             $payment_status = $this->map_transaction_status($transaction_data['transaction_status']);
             update_post_meta($order_post_id, 'payment_status', $payment_status);
             update_post_meta($order_post_id, 'midtrans_transaction_id', $transaction_data['transaction_id']);
@@ -115,8 +122,8 @@ class Coffee_Shop_Midtrans_Controller extends Coffee_Shop_REST_Controller {
                 Coffee_Shop_Order_Emails::send_order_confirmation($order_post_id, $submission['id']);
             }
 
-            // Send payment confirmation email for successful payments
-            if ($payment_status === 'paid' && in_array($transaction_data['transaction_status'], ['capture', 'settlement'])) {
+            // Send payment confirmation email only the first time this order transitions to paid
+            if ($payment_status === 'paid' && $previous_payment_status !== 'paid' && in_array($transaction_data['transaction_status'], ['capture', 'settlement'])) {
                 Coffee_Shop_Order_Emails::send_payment_confirmation($order_post_id);
             }
         }

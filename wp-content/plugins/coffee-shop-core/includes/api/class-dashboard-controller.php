@@ -294,8 +294,16 @@ $data = array();
 
     /**
      * Admin permissions check
+     *
+     * manage_coffee_shop_orders / view_coffee_shop_reports are granted to the store_admin
+     * and cashier roles (see Coffee_Shop_User_Roles::add_role_capabilities()) specifically so
+     * staff can view orders and reports without the full administrator-only manage_options
+     * capability - this was previously ignored here, blocking recent-orders (used by the
+     * /dashboard/orders page) for both roles despite the role system already granting it.
      */
     public function admin_permissions_check($request) {
-        return current_user_can('manage_options');
+        return current_user_can('manage_options')
+            || current_user_can('manage_coffee_shop_orders')
+            || current_user_can('view_coffee_shop_reports');
     }
 }

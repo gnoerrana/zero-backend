@@ -73,12 +73,12 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
             ),
         ));
 
-        // Get members list (admin only)
+        // Get members list (view-only - store_admin and cashier can view, see view_permissions_check)
         register_rest_route($this->namespace, '/members', array(
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array($this, 'get_members'),
-                'permission_callback' => array($this, 'admin_permissions_check'),
+                'permission_callback' => array($this, 'view_permissions_check'),
             ),
         ));
 
@@ -535,9 +535,24 @@ class Coffee_Shop_Rewards_Controller extends Coffee_Shop_REST_Controller {
     }
 
     /**
-     * Admin permissions check
+     * Admin permissions check - gates reward catalog CRUD and manual point
+     * adjustments. Deliberately left at manage_options only: store_admin and
+     * cashier are not granted any reward-editing capability by design (cashier
+     * in particular only ever gets view_coffee_shop_reports), so widening this
+     * would let cashier create/edit/delete rewards or adjust points, which
+     * wasn't asked for and isn't part of that role's intended scope.
      */
     public function admin_permissions_check($request) {
         return current_user_can('manage_options');
+    }
+
+    /**
+     * View-only permissions check - gates the members list. store_admin and
+     * cashier are granted view_coffee_shop_reports specifically to view
+     * reporting/member data without needing manage_options or any
+     * reward-editing capability.
+     */
+    public function view_permissions_check($request) {
+        return current_user_can('manage_options') || current_user_can('view_coffee_shop_reports');
     }
 }

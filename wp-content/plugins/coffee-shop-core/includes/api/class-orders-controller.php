@@ -117,14 +117,38 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
             $args['post_status'] = $status;
         }
 
-        // Filter by date
-        if ($date = $request->get_param('date')) {
-            $args['date_query'] = array(
-                array(
-                    'after' => $date,
-                    'inclusive' => true,
-                ),
-            );
+        // Filter by date range. 'date' is kept as a back-compat alias for 'date_from'.
+        $date_from = $request->get_param('date_from') ?: $request->get_param('date');
+        $date_to = $request->get_param('date_to');
+
+        if ($date_from || $date_to) {
+            $date_query = array('inclusive' => true);
+            if ($date_from) {
+                $date_query['after'] = $date_from;
+            }
+            if ($date_to) {
+                // Append end-of-day so the "to" date is inclusive of the whole day, not just midnight.
+                $date_query['before'] = $date_to . ' 23:59:59';
+            }
+            $args['date_query'] = array($date_query);
+        }
+
+        // Free-text search across order number, customer name/email/phone (post title/meta,
+        // plus the dedicated order_submissions table where most orders actually store this data).
+        if ($search = $request->get_param('search')) {
+            $matching_post_ids = $this->search_order_post_ids($search);
+
+            if (empty($matching_post_ids)) {
+                // WP_Query silently ignores an empty post__in array (treats it as "no restriction"),
+                // so a no-match search must short-circuit here instead of falling through.
+                return $this->format_response(array(
+                    'orders' => array(),
+                    'total'  => 0,
+                    'pages'  => 0,
+                ));
+            }
+
+            $args['post__in'] = $matching_post_ids;
         }
 
         $query = new WP_Query($args);
@@ -139,6 +163,46 @@ class Coffee_Shop_Orders_Controller extends Coffee_Shop_REST_Controller {
             'total'  => $query->found_posts,
             'pages'  => $query->max_num_pages,
         ));
+    }
+
+    /**
+     * Find order post IDs matching a free-text search term.
+     *
+     * Order data is split across wp_posts (title), postmeta (customer_name/email/phone -
+     * used when an order has no submission row), and the dedicated order_submissions table
+     * (order_id/name/email/phone - the primary source for orders placed through checkout).
+     * A LEFT JOIN across all three lets one query match whichever source actually has the data.
+     */
+    private function search_order_post_ids($search) {
+        global $wpdb;
+
+        $submissions_table = $wpdb->prefix . 'coffee_orders_submission';
+        $like = '%' . $wpdb->esc_like($search) . '%';
+
+        $sql = "
+            SELECT DISTINCT p.ID
+            FROM {$wpdb->posts} p
+            LEFT JOIN {$submissions_table} s ON s.order_post_id = p.ID
+            LEFT JOIN {$wpdb->postmeta} pm_name ON pm_name.post_id = p.ID AND pm_name.meta_key = 'customer_name'
+            LEFT JOIN {$wpdb->postmeta} pm_email ON pm_email.post_id = p.ID AND pm_email.meta_key = 'customer_email'
+            LEFT JOIN {$wpdb->postmeta} pm_phone ON pm_phone.post_id = p.ID AND pm_phone.meta_key = 'customer_phone'
+            WHERE p.post_type = 'order'
+            AND (
+                p.post_title LIKE %s
+                OR s.order_id LIKE %s
+                OR s.first_name LIKE %s
+                OR s.last_name LIKE %s
+                OR s.email LIKE %s
+                OR s.phone LIKE %s
+                OR pm_name.meta_value LIKE %s
+                OR pm_email.meta_value LIKE %s
+                OR pm_phone.meta_value LIKE %s
+            )
+        ";
+
+        $post_ids = $wpdb->get_col($wpdb->prepare($sql, array_fill(0, 9, $like)));
+
+        return array_map('intval', $post_ids);
     }
 
 /**
@@ -661,11 +725,14 @@ $submission_id = $submissions_db->insert(array(
     }
 
     public function update_item_permissions_check($request) {
-        return current_user_can('manage_options');
+        // manage_coffee_shop_orders is granted to the store_admin and cashier roles
+        // specifically so staff can update order status (e.g. preparing/ready) without
+        // needing the full administrator-only manage_options capability.
+        return current_user_can('manage_options') || current_user_can('manage_coffee_shop_orders');
     }
 
     public function delete_item_permissions_check($request) {
-        return current_user_can('manage_options');
+        return current_user_can('manage_options') || current_user_can('manage_coffee_shop_orders');
     }
 
 /**
@@ -691,7 +758,19 @@ $submission_id = $submissions_db->insert(array(
 'enum' => array('pending', 'pending_payment', 'processing', 'preparing', 'ready', 'completed', 'cancelled'),
             ),
             'date' => array(
-                'description'       => __('Filter by date.', 'coffee-shop'),
+                'description'       => __('Filter by date (deprecated alias for date_from).', 'coffee-shop'),
+                'type'              => 'string',
+            ),
+            'date_from' => array(
+                'description'       => __('Filter to orders placed on or after this date (Y-m-d).', 'coffee-shop'),
+                'type'              => 'string',
+            ),
+            'date_to' => array(
+                'description'       => __('Filter to orders placed on or before this date (Y-m-d).', 'coffee-shop'),
+                'type'              => 'string',
+            ),
+            'search' => array(
+                'description'       => __('Free-text search across order number, customer name, email, and phone.', 'coffee-shop'),
                 'type'              => 'string',
             ),
         );
